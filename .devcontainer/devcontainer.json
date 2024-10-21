@@ -6,10 +6,6 @@
     "runArgs": [
         "--gpus", "all"
     ],
-    // install vizdoom
-    "postCreateCommand": "pip install vizdoom==1.2.4",
     // Automatically start the virtual display (Xvfb) and run your dependency check script
-    "postStartCommand": "Xvfb :1 -screen 0 800x600x16 & export DISPLAY=:1 && python /workspaces/rl_doom/debug/check_dependencies.py && python /workspaces/rl_doom/debug/vizdoom_test.py",
-    // Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
-    // "remoteUser": "root"
+    "postStartCommand": "Xvfb :1 -screen 0 800x600x16 & export DISPLAY=:1 && python /workspaces/rl_doom/debug/check_dependencies.py && python /workspaces/rl_doom/debug/vizdoom_test.py && gh auth login && gh auth status",
 }
