@@ -1,5 +1,4 @@
 import vizdoom as vzd
-import time
 
 # Create a DoomGame instance
 game = vzd.DoomGame()
@@ -44,9 +43,6 @@ for i in range(episodes):
         print(f"State # {state.number}")
         print(f"Action reward: {reward}")
         print("===================")
-
-        # Sleep for a while to make it human-readable (for test purposes)
-        time.sleep(0.02)
 
     print(f"Episode finished! Total reward: {game.get_total_reward()}")
     print("=============================")
