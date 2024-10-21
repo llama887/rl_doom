@@ -46,7 +46,7 @@ for i in range(episodes):
         print("===================")
 
         # Sleep for a while to make it human-readable (for test purposes)
-        time.sleep(0.002)
+        time.sleep(0.02)
 
     print(f"Episode finished! Total reward: {game.get_total_reward()}")
     print("=============================")
