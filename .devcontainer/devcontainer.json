@@ -1,13 +1,15 @@
 {
-	"name": "VizDoom CS-GY 6923",
-	"build": {
-		"dockerfile": "Dockerfile"
-	},
-	"runArgs": [
-		"--gpus", "all"
-	],
-	// No need to run postCreateCommand as it’s already done in Dockerfile
-	"postStartCommand": "python /workspaces/rl_pacman/debug/check_dependencies.py"
-	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
-	// "remoteUser": "root"
+    "name": "VizDoom CS-GY 6923",
+    "build": {
+        "dockerfile": "Dockerfile"
+    },
+    "runArgs": [
+        "--gpus", "all"
+    ],
+    // install vizdoom
+    "postCreateCommand": "pip install vizdoom==1.2.4",
+    // Automatically start the virtual display (Xvfb) and run your dependency check script
+    "postStartCommand": "Xvfb :1 -screen 0 800x600x16 & export DISPLAY=:1 && python /workspaces/rl_doom/debug/check_dependencies.py && python /workspaces/rl_doom/debug/vizdoom_test.py",
+    // Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
+    // "remoteUser": "root"
 }
