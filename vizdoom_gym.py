@@ -1,3 +1,5 @@
+import random
+
 import gymnasium as gym
 import numpy as np
 import vizdoom as vzd
@@ -5,7 +7,7 @@ from gymnasium import spaces
 
 
 class VizDoomGymWrapper(gym.Env):
-    def __init__(self):
+    def __init__(self, headless=True):
         super(VizDoomGymWrapper, self).__init__()
 
         # Create a DoomGame instance
@@ -19,6 +21,7 @@ class VizDoomGymWrapper(gym.Env):
         # Set the game to be played in PLAYER mode
         self.game.set_mode(vzd.Mode.PLAYER)
         self.game.init()
+        self.game.set_window_visible(not headless)  # Disable the window display
 
         # Define action and observation space
         # Assuming action space size corresponds to available buttons
@@ -30,8 +33,13 @@ class VizDoomGymWrapper(gym.Env):
             low=0, high=255, shape=screen_shape, dtype=np.uint8
         )
 
-    def reset(self):
+    def reset(self, seed=None):
         """Reset the environment and return the initial observation."""
+        super().reset(seed=seed)
+        if seed is not None:
+            np.random.seed(seed)
+            random.seed(seed)
+
         self.game.new_episode()
         state = self.game.get_state()
         return state.screen_buffer
