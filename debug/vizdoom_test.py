@@ -13,15 +13,13 @@ game.set_doom_scenario_path(vzd.scenarios_path + "/basic.wad")
 game.set_doom_map("map01")
 
 # Initialize the game in headless for testing
-# game.set_window_visible(False)  # Disable the window display
-# game.set_mode(vzd.Mode.PLAYER)
+game.set_window_visible(False)  # Disable the window display
+game.set_mode(vzd.Mode.PLAYER)
 game.init()
 
 # Run a few episodes
 episodes = 1
 for i in range(episodes):
-    print(f"Episode #{i + 1}")
-
     # Start a new episode
     game.new_episode()
 
@@ -38,11 +36,6 @@ for i in range(episodes):
 
         # Make the action
         reward = game.make_action(action)
-
-        # Print some information
-        print(f"State # {state.number}")
-        print(f"Action reward: {reward}")
-        print("===================")
 
     print(f"Episode finished! Total reward: {game.get_total_reward()}")
     print("=============================")

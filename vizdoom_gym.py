@@ -13,15 +13,22 @@ class VizDoomGymWrapper(gym.Env):
         # Create a DoomGame instance
         self.game = vzd.DoomGame()
 
+        # Set the game to be played in PLAYER mode
+        self.game.set_mode(vzd.Mode.PLAYER)
+        self.game.init()
+        if headless:
+            self.game.set_window_visible(False)  # Disable the window display
+            self.game.set_render_hud(False)  # Disable HUD rendering
+            self.game.set_render_minimal_hud(True)  # Disable minimal HUD
+            self.game.set_render_weapon(False)  # Disable weapon rendering
+            self.game.set_render_crosshair(False)  # Disable crosshair rendering
+            self.game.set_render_decals(False)  # Disable decals
+            self.game.set_render_particles(False)  # Disable particles
+
         # Load basic configuration file
         self.game.load_config(vzd.scenarios_path + "/basic.cfg")
         self.game.set_doom_scenario_path(vzd.scenarios_path + "/basic.wad")
         self.game.set_doom_map("map01")
-
-        # Set the game to be played in PLAYER mode
-        self.game.set_mode(vzd.Mode.PLAYER)
-        self.game.init()
-        self.game.set_window_visible(not headless)  # Disable the window display
 
         # Define action and observation space
         # Assuming action space size corresponds to available buttons
