@@ -3,8 +3,19 @@
 # Make this script executable
 chmod +x aider.sh
 
-# Authenticate with GitHub
-gh auth login
+# Function to check if SSH to GitHub works
+check_ssh() {
+    ssh -T git@github.com &>/dev/null
+    return $?
+}
+
+# Check SSH authentication with GitHub
+if check_ssh; then
+    echo "SSH authentication with GitHub is already working."
+else
+    echo "SSH authentication failed. Attempting to authenticate with GitHub CLI."
+    gh auth login
+fi
 
 # Check GitHub authentication status
 gh auth status
