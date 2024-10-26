@@ -4,6 +4,7 @@ from skimage.color import rgb2gray
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
 from stable_baselines3.common.evaluation import evaluate_policy
+from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import DummyVecEnv, VecTransposeImage
 
 
@@ -16,7 +17,11 @@ def make_env():
     env = gym.wrappers.TransformObservation(
         env, lambda obs: np.expand_dims(rgb2gray(obs), axis=-1)
     )
-    return env
+    return Monitor(
+        env,
+        directory="./logs/",
+        video_callable=lambda episode_id: episode_id % 10000 == 0,
+    )
 
 
 def train_space_invaders():
