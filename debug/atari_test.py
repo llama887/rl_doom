@@ -3,7 +3,7 @@ import gymnasium as gym
 
 def atari_test():
     # Create the Atari environment
-    env = gym.make("ALE/Pong-v5", render_mode="human")
+    env = gym.make("ALE/SpaceInvaders-v5", render_mode="human")
 
     # Reset the environment to start
     observation, info = env.reset()
