@@ -1,4 +1,5 @@
 import gymnasium as gym
+import numpy as np
 from skimage.color import rgb2gray
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
@@ -12,7 +13,9 @@ def make_env():
         repeat_action_probability=0.0,
         full_action_space=False,
     )
-    env = gym.wrappers.TransformObservation(env, lambda obs: rgb2gray(obs))
+    env = gym.wrappers.TransformObservation(
+        env, lambda obs: np.expand_dims(rgb2gray(obs), axis=-1)
+    )
     return env
 
 
