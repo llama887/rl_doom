@@ -1,9 +1,17 @@
-import gymnasium as gym
 import time
 
+import gymnasium as gym
+
+
 def atari_test():
-    # Create the Space Invaders environment with a frame rate of 6 fps
-    env = gym.make("ALE/SpaceInvaders-v5", render_mode="human", frameskip=1, repeat_action_probability=0.0, full_action_space=False, render_fps=6)
+    env = gym.make(
+        "ALE/SpaceInvaders-v5",
+        render_mode="human",
+        frameskip=1,
+        repeat_action_probability=0.0,
+        full_action_space=False,
+    )
+    env.metadata["render_fps"] = 6
 
     # Reset the environment to start
     observation, info = env.reset()
@@ -25,6 +33,7 @@ def atari_test():
             observation, info = env.reset()
 
     env.close()
+
 
 if __name__ == "__main__":
     atari_test()
