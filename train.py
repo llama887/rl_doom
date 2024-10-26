@@ -16,10 +16,7 @@ def make_env():
     env = gym.wrappers.TransformObservation(
         env, lambda obs: np.expand_dims(rgb2gray(obs), axis=-1)
     )
-    return Monitor(
-        env,
-        video_callable=lambda episode_id: episode_id % 10000 == 0,
-    )
+    return Monitor(env)
 
 def train_space_invaders():
     # Create the training environment and wrap it in VecTransposeImage
