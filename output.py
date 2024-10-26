@@ -17,7 +17,6 @@ def make_env():
     )
     return Monitor(
         env,
-        directory="./logs/",
         video_callable=lambda episode_id: episode_id % 10000 == 0,
     )
 

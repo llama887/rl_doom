@@ -7,7 +7,6 @@ from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import DummyVecEnv, VecTransposeImage
 
-
 def make_env():
     env = gym.make(
         "ALE/SpaceInvaders-v5",
@@ -19,10 +18,8 @@ def make_env():
     )
     return Monitor(
         env,
-        directory="./logs/",
         video_callable=lambda episode_id: episode_id % 10000 == 0,
     )
-
 
 def train_space_invaders():
     # Create the training environment and wrap it in VecTransposeImage
@@ -56,7 +53,6 @@ def train_space_invaders():
     # Evaluate the trained model
     mean_reward, std_reward = evaluate_policy(model, eval_env, n_eval_episodes=10)
     print(f"Mean reward: {mean_reward} +/- {std_reward}")
-
 
 if __name__ == "__main__":
     train_space_invaders()
