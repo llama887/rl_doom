@@ -3,7 +3,7 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.vec_env import DummyVecEnv, VecTransposeImage
-
+from skimage.color import rgb2gray
 
 def make_env():
     env = gym.make(
@@ -11,8 +11,8 @@ def make_env():
         repeat_action_probability=0.0,
         full_action_space=False,
     )
+    env = gym.wrappers.TransformObservation(env, lambda obs: rgb2gray(obs))
     return env
-
 
 def train_space_invaders():
     # Create the training environment and wrap it in VecTransposeImage
@@ -46,7 +46,6 @@ def train_space_invaders():
     # Evaluate the trained model
     mean_reward, std_reward = evaluate_policy(model, eval_env, n_eval_episodes=10)
     print(f"Mean reward: {mean_reward} +/- {std_reward}")
-
 
 if __name__ == "__main__":
     train_space_invaders()
