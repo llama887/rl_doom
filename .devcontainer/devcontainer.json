@@ -1,17 +1,17 @@
 {
-    "name": "VizDoom CS-GY 6923",
-    "build": {
-        "dockerfile": "Dockerfile"
-    },
-    "runArgs": [
-        "--gpus", "all"
-    ],
-    "customizations": {
+	"name": "Template",
+	"build": {
+		"dockerfile": "Dockerfile"
+	},
+	"runArgs": [
+		"--gpus", "all","--init", "-v", "${env:HOME}/.ssh:/root/.ssh"
+	],
+	"postStartCommand": "chmod +x aider.sh && gh auth login && gh auth status && git remote set-url origin https://github.com/llama887/dev_container_template.git && python /workspaces/rl_doom/debug/check_dependencies.py",
+	"customizations": {
 		"vscode": {
 			"extensions": [
 				"charliermarsh.ruff",
 				"codezombiech.gitignore",
-				"eamodio.gitlens",
 				"kevinrose.vsc-python-indent",
 				"ms-azuretools.vscode-docker",
 				"ms-python.python",
@@ -20,9 +20,14 @@
 				"shardulm94.trailing-spaces",
 				"usernamehw.errorlens",
 				"yzhang.markdown-all-in-one",
-				"iterative.dvc",
 				"ms-toolsai.jupyter",
-				"ms-toolsai.tensorboard"
+				"ms-toolsai.tensorboard",
+				"aaron-bond.better-comments",
+				"cardinal90.multi-cursor-case-preserve",
+				"shd101wyy.markdown-preview-enhanced",
+				"supermaven.supermaven",
+				"continue.continue",
+				"saoudrizwan.claude-dev"
 			],
 			"settings": {
 				"[python]": {
@@ -43,7 +48,5 @@
 				}
 			}
 		}
-    },
-    // Automatically start the virtual display (Xvfb) and run your dependency check script
-    "postStartCommand": "Xvfb :1 -screen 0 800x600x16 & export DISPLAY=:1 && python /workspaces/rl_doom/debug/check_dependencies.py && python /workspaces/rl_doom/debug/vizdoom_test.py", //&& gh auth login && gh auth status",
+	}
 }
