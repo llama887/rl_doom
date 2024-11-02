@@ -5,22 +5,21 @@ FROM mcr.microsoft.com/devcontainers/python:1-3.10-bullseye
 WORKDIR /app
 
 # Install system dependencies
-RUN apt-get update && \
-    apt-get install -y \
+RUN apt-get update --fix-missing && \
+    apt-get install -y --no-install-recommends \
     python3-dev \
     build-essential \
     cmake \
     zlib1g-dev \
     libjpeg-dev \
-    xvfb \
     xorg \
     libsdl2-dev \
     libboost-all-dev \
     swig \
     ffmpeg \
     git \
-    wget \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
+    wget && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install GitHub CLI (gh)
 RUN (type -p wget >/dev/null || (apt update && apt-get install wget -y)) \
