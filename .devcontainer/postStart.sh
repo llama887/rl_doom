@@ -1,7 +1,10 @@
 #!/bin/bash
-
-# Make this script executable
-chmod +x aider.sh
+if command -v nvidia-smi &> /dev/null; then
+    GPU_FLAG="--gpus all"
+else
+    GPU_FLAG=""
+fi
+echo "GPU_FLAG set to: $GPU_FLAG"
 
 # Function to check if SSH to GitHub works
 check_ssh() {
@@ -22,6 +25,7 @@ gh auth status
 
 # Set the remote URL for Git to the specified repository
 git remote set-url origin https://github.com/llama887/rl_doom.git
+
 
 # Run the dependency check script
 python /workspaces/rl_doom/debug/check_dependencies.py

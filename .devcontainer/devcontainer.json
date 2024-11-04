@@ -4,9 +4,10 @@
 		"dockerfile": "Dockerfile"
 	},
 	"runArgs": [
-		"--gpus", "all","--init", "-v", "${env:HOME}/.ssh:/root/.ssh"
+		"--gpus", "all", "--init", "-v", "${env:HOME}/.ssh:/root/.ssh"
 	],
-	"postStartCommand": "chmod +x .devcontainer/postStart.sh && .devcontainer/postStart.sh",
+	"postStartCommand": "dos2unix .devcontainer/postStart.sh && chmod +x .devcontainer/postStart.sh && .devcontainer/postStart.sh",
+	"remoteUser": "root",
 	"customizations": {
 		"vscode": {
 			"extensions": [

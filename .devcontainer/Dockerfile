@@ -18,7 +18,8 @@ RUN apt-get update --fix-missing && \
     swig \
     ffmpeg \
     git \
-    wget && \
+    wget \
+    dos2unix && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install GitHub CLI (gh)
