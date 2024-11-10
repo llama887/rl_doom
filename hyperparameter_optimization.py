@@ -8,15 +8,42 @@ from stable_baselines3.common.vec_env import DummyVecEnv, VecFrameStack
 from train import make_env
 
 
-def optimize_ppo(trial):
+def find_valid_n_steps_and_batch_size(n_envs=1, target_rollout_size=1024):
+    # Define possible values for n_steps based on factors of the target rollout size
+    valid_n_steps = [i for i in range(128, 2049) if target_rollout_size % i == 0]
+
+    # Calculate valid batch sizes that will divide the target rollout size evenly
+    valid_batch_sizes = [
+        i for i in [16, 32, 64, 128, 256, 512] if target_rollout_size % i == 0
+    ]
+
+    return valid_n_steps, valid_batch_sizes
+
+
+def optimize_ppo(trial, n_envs=1):
+    # Define a target rollout size (e.g., 1024, 2048) based on resource constraints
+    target_rollout_size = 1024 * n_envs
+
+    # Get valid n_steps and batch sizes based on the target rollout size
+    valid_n_steps, valid_batch_sizes = find_valid_n_steps_and_batch_size(
+        n_envs, target_rollout_size
+    )
+
+    # Sample n_steps from valid options
+    n_steps = trial.suggest_categorical("n_steps", valid_n_steps)
+
+    # Sample batch_size from valid options
+    batch_size = trial.suggest_categorical("batch_size", valid_batch_sizes)
+
     return {
-        "learning_rate": trial.suggest_loguniform("learning_rate", 1e-5, 1e-3),
-        "ent_coef": trial.suggest_loguniform("ent_coef", 1e-8, 1e-1),
-        "clip_range": trial.suggest_uniform("clip_range", 0.1, 0.4),
-        "gamma": trial.suggest_uniform("gamma", 0.9, 0.999),
-        "gae_lambda": trial.suggest_uniform("gae_lambda", 0.8, 0.95),
-        "n_steps": trial.suggest_int("n_steps", 128, 2048, log=True),
-        "max_grad_norm": trial.suggest_uniform("max_grad_norm", 0.3, 0.9),
+        "learning_rate": trial.suggest_float("learning_rate", 1e-5, 1e-3, log=True),
+        "ent_coef": trial.suggest_float("ent_coef", 1e-8, 0.1, log=True),
+        "clip_range": trial.suggest_float("clip_range", 0.1, 0.4),
+        "gamma": trial.suggest_float("gamma", 0.9, 0.999),
+        "gae_lambda": trial.suggest_float("gae_lambda", 0.8, 0.95),
+        "n_steps": n_steps,
+        "batch_size": batch_size,
+        "max_grad_norm": trial.suggest_float("max_grad_norm", 0.3, 0.9),
     }
 
 
