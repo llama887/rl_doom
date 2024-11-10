@@ -4,7 +4,7 @@ from skimage.color import rgb2gray
 from stable_baselines3 import PPO
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.monitor import Monitor
-from stable_baselines3.common.vec_env import DummyVecEnv, VecTransposeImage
+from stable_baselines3.common.vec_env import DummyVecEnv, VecFrameStack
 
 
 def make_env():
@@ -16,6 +16,7 @@ def make_env():
     )
     env.metadata["render_fps"] = 30
 
+    # Convert to grayscale and reshape
     env = gym.wrappers.TransformObservation(
         env, lambda obs: np.expand_dims(rgb2gray(obs), axis=-1)
     )
@@ -23,12 +24,12 @@ def make_env():
 
 
 def watch_trained_agent():
-    # Create the environment
+    # Create the environment with frame stacking
     env = DummyVecEnv([make_env])
-    env = VecTransposeImage(env)
+    env = VecFrameStack(env, n_stack=4)  # Stack the last 4 grayscale frames
 
     # Load the trained model
-    model = PPO.load("space_invaders_model", env=env)
+    model = PPO.load("logs/best_model", env=env)
 
     # Evaluate the trained model
     mean_reward, std_reward = evaluate_policy(

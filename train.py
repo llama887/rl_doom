@@ -1,3 +1,5 @@
+import json
+
 import gymnasium as gym
 import numpy as np
 from skimage.color import rgb2gray
@@ -5,7 +7,8 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.monitor import Monitor
-from stable_baselines3.common.vec_env import DummyVecEnv, VecTransposeImage
+from stable_baselines3.common.vec_env import DummyVecEnv, VecFrameStack
+
 
 def make_env():
     env = gym.make(
@@ -18,17 +21,34 @@ def make_env():
     )
     return Monitor(env)
 
+
+def load_hyperparameters(filename="best_hyperparameters.json"):
+    # Load the best hyperparameters from a JSON file
+    with open(filename, "r") as f:
+        params = json.load(f)
+    return params
+
+
 def train_space_invaders():
-    # Create the training environment and wrap it in VecTransposeImage
+    # Load the best hyperparameters
+    hyperparams = load_hyperparameters()
+
+    # Create the training environment and apply VecFrameStack for frame stacking
     env = DummyVecEnv([make_env])
-    env = VecTransposeImage(env)
+    env = VecFrameStack(env, n_stack=4)  # Stack the last 4 grayscale frames
 
-    # Create the evaluation environment and wrap it similarly
+    # Create the evaluation environment
     eval_env = DummyVecEnv([make_env])
-    eval_env = VecTransposeImage(eval_env)
+    eval_env = VecFrameStack(eval_env, n_stack=4)
 
-    # Create the RL model with TensorBoard logging
-    model = PPO("CnnPolicy", env, verbose=1, tensorboard_log="./tensorboard_logs/")
+    # Create the RL model with loaded hyperparameters and TensorBoard logging
+    model = PPO(
+        "CnnPolicy",
+        env,
+        verbose=1,
+        tensorboard_log="./tensorboard_logs/",
+        **hyperparams,
+    )
 
     # Create callbacks for checkpointing and evaluation
     checkpoint_callback = CheckpointCallback(save_freq=10000, save_path="./logs/")
@@ -50,6 +70,7 @@ def train_space_invaders():
     # Evaluate the trained model
     mean_reward, std_reward = evaluate_policy(model, eval_env, n_eval_episodes=10)
     print(f"Mean reward: {mean_reward} +/- {std_reward}")
+
 
 if __name__ == "__main__":
     train_space_invaders()
