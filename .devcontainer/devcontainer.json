@@ -26,9 +26,11 @@
 				"cardinal90.multi-cursor-case-preserve",
 				"shd101wyy.markdown-preview-enhanced",
 				"supermaven.supermaven",
-				"continue.continue",
-				"saoudrizwan.claude-dev",
-				"ms-toolsai.tensorboard"
+				"ms-toolsai.tensorboard",
+				"pkief.material-icon-theme",
+				"jeff-hykin.polacode-2019",
+				"streetsidesoftware.code-spell-checker",
+				"tomoki1207.pdf"
 			],
 			"settings": {
 				"[python]": {
@@ -46,7 +48,8 @@
 					"zsh": {
 						"path": "/bin/zsh"
 					}
-				}
+				},
+				"editor.codeLens": false
 			}
 		}
 	}

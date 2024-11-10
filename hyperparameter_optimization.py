@@ -13,9 +13,7 @@ def find_valid_n_steps_and_batch_size(n_envs=1, target_rollout_size=1024):
     valid_n_steps = [i for i in range(128, 2049) if target_rollout_size % i == 0]
 
     # Calculate valid batch sizes that will divide the target rollout size evenly
-    valid_batch_sizes = [
-        i for i in [16, 32, 64, 128, 256, 512] if target_rollout_size % i == 0
-    ]
+    valid_batch_sizes = [i for i in range(16, 2049) if target_rollout_size % i == 0]
 
     return valid_n_steps, valid_batch_sizes
 
@@ -36,7 +34,7 @@ def optimize_ppo(trial, n_envs=1):
     batch_size = trial.suggest_categorical("batch_size", valid_batch_sizes)
 
     return {
-        "learning_rate": trial.suggest_float("learning_rate", 1e-5, 1e-3, log=True),
+        "learning_rate": trial.suggest_float("learning_rate", 1e-7, 1e-2, log=True),
         "ent_coef": trial.suggest_float("ent_coef", 1e-8, 0.1, log=True),
         "clip_range": trial.suggest_float("clip_range", 0.1, 0.4),
         "gamma": trial.suggest_float("gamma", 0.9, 0.999),
@@ -61,7 +59,7 @@ def objective(trial):
     model = PPO("CnnPolicy", env, **params, verbose=0)
 
     # Train the model for a small number of timesteps for evaluation purposes
-    model.learn(total_timesteps=10000)
+    model.learn(total_timesteps=100000)
 
     # Evaluate the model
     mean_reward, _ = evaluate_policy(model, eval_env, n_eval_episodes=5)
@@ -71,7 +69,7 @@ def objective(trial):
 if __name__ == "__main__":
     # Run the hyperparameter optimization
     study = optuna.create_study(direction="maximize")
-    study.optimize(objective, n_trials=50)
+    study.optimize(objective, n_trials=10)
 
     # Output the best hyperparameters
     print(study.best_params)
