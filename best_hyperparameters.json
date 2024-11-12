@@ -1,0 +1,1 @@
+{"algorithm": "DQN", "n_stack": 7, "learning_rate": 0.00011017244926102156, "buffer_size": 2281, "batch_size": 32, "train_freq": 8, "gamma": 0.9226993542137322, "target_update_interval": 574, "exploration_fraction": 0.3186831741625872, "exploration_final_eps": 0.05946973943206595, "learning_starts": 2583}
