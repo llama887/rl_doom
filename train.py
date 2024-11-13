@@ -1,5 +1,4 @@
 import json
-
 import gymnasium as gym
 import numpy as np
 from skimage.color import rgb2gray
@@ -22,17 +21,7 @@ def make_env():
     return Monitor(env)
 
 
-def load_hyperparameters(filename="best_hyperparameters.json"):
-    # Load the best hyperparameters from a JSON file
-    with open(filename, "r") as f:
-        params = json.load(f)
-    return params
-
-
 def train_space_invaders():
-    # Load the best hyperparameters
-    hyperparams = load_hyperparameters()
-
     # Create the training environment and apply VecFrameStack for frame stacking
     env = DummyVecEnv([make_env])
     env = VecFrameStack(env, n_stack=4)  # Stack the last 4 grayscale frames
@@ -41,13 +30,20 @@ def train_space_invaders():
     eval_env = DummyVecEnv([make_env])
     eval_env = VecFrameStack(eval_env, n_stack=4)
 
-    # Create the RL model with loaded hyperparameters and TensorBoard logging
+    # Define hyperparameters directly within the model instantiation
     model = PPO(
         "CnnPolicy",
         env,
         verbose=1,
         tensorboard_log="./tensorboard_logs/",
-        **hyperparams,
+        learning_rate=0.0003,
+        n_steps=2048,
+        batch_size=64,
+        n_epochs=10,
+        gamma=0.99,
+        gae_lambda=0.95,
+        clip_range=0.2,
+        ent_coef=0.01
     )
 
     # Create callbacks for checkpointing and evaluation
