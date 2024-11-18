@@ -1,3 +1,5 @@
+import json
+
 import gymnasium as gym
 from stable_baselines3 import A2C, DQN, PPO
 from stable_baselines3.common.atari_wrappers import (
@@ -28,6 +30,13 @@ def make_env():
     env = ClipRewardEnv(env)
     env = EpisodicLifeEnv(env)
     return Monitor(env)
+
+
+def load_hyperparameters(filename="best_hyperparameters.json"):
+    # Load the best hyperparameters from a JSON file
+    with open(filename, "r") as f:
+        params = json.load(f)
+    return params
 
 
 def train_pong(use_atari_make=True):
