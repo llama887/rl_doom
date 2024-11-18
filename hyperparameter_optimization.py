@@ -4,10 +4,11 @@ import optuna
 from optuna.pruners import MedianPruner
 from stable_baselines3 import A2C, DQN, PPO
 from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.env_util import make_atari_env
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.vec_env import DummyVecEnv, VecFrameStack
 
-from train import make_env
+from train import USE_ATARI_MAKE, make_env
 
 
 class TrialPruningCallback(BaseCallback):
@@ -92,7 +93,7 @@ def optimize_dqn(trial):
 
 
 def objective(trial):
-    algorithm = trial.suggest_categorical("algorithm", ["PPO", "A2C", "DQN"])
+    algorithm = trial.suggest_categorical("algorithm", ["PPO"])
 
     # Define n_stack as a hyperparameter
     n_stack = trial.suggest_int("n_stack", 1, 10)
@@ -110,10 +111,14 @@ def objective(trial):
         params = optimize_dqn(trial)
 
     # Set up environments with the chosen frame stack setting
-    env = DummyVecEnv([make_env])
-    env = VecFrameStack(env, n_stack=n_stack)
-    eval_env = DummyVecEnv([make_env])
-    eval_env = VecFrameStack(eval_env, n_stack=n_stack)
+    if USE_ATARI_MAKE:
+        env = make_atari_env("PongNoFrameskip-v4", n_envs=1, seed=0)
+        eval_env = make_atari_env("PongNoFrameskip-v4", n_envs=1, seed=0)
+    else:
+        env = DummyVecEnv([make_env])
+        env = VecFrameStack(env, n_stack=n_stack)
+        eval_env = DummyVecEnv([make_env])
+        eval_env = VecFrameStack(eval_env, n_stack=n_stack)
 
     # Initialize the model based on the selected algorithm
     if algorithm == "PPO":
@@ -127,7 +132,7 @@ def objective(trial):
     pruning_callback = TrialPruningCallback(trial, eval_env)
 
     # Train the model
-    model.learn(total_timesteps=100000, callback=pruning_callback)
+    model.learn(total_timesteps=1000000, callback=pruning_callback)
 
     # Evaluate the model
     mean_reward, _ = evaluate_policy(model, eval_env, n_eval_episodes=5)
@@ -137,6 +142,9 @@ def objective(trial):
 if __name__ == "__main__":
     study = optuna.create_study(direction="maximize", pruner=MedianPruner())
     study.optimize(objective, n_trials=50)
+
+    if study.best_params["algorithm"] == "DQN":
+        study.best_params["n_stack"] = 1
 
     print(study.best_params)
 
