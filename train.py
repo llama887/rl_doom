@@ -11,7 +11,6 @@ from stable_baselines3.common.atari_wrappers import (
     WarpFrame,
 )
 from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
-from stable_baselines3.common.env_util import make_atari_env
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import DummyVecEnv, VecFrameStack
@@ -19,9 +18,12 @@ from stable_baselines3.common.vec_env import DummyVecEnv, VecFrameStack
 USE_ATARI_MAKE = True
 
 
-def make_env():
+def make_env(render_mode=None):
     env = gym.make(
-        "ALE/Pong-v5", repeat_action_probability=0.0, full_action_space=False
+        "ALE/Pong-v5",
+        repeat_action_probability=0.0,
+        full_action_space=False,
+        render_mode=render_mode,
     )
     env = NoopResetEnv(env, noop_max=30)
     env = MaxAndSkipEnv(env, skip=4)
@@ -39,7 +41,7 @@ def load_hyperparameters(filename="best_hyperparameters.json"):
     return params
 
 
-def train_pong(use_atari_make=True):
+def load_model_and_envs():
     # Load the best hyperparameters
     hyperparameters = load_hyperparameters()
     algorithm = hyperparameters.pop(
@@ -52,12 +54,8 @@ def train_pong(use_atari_make=True):
         n_stack = 1
 
     # Choose the environment creation function
-    if use_atari_make:
-        env = make_atari_env("PongNoFrameskip-v4", n_envs=1, seed=0)
-        eval_env = make_atari_env("PongNoFrameskip-v4", n_envs=1, seed=0)
-    else:
-        env = DummyVecEnv([make_env])
-        eval_env = DummyVecEnv([make_env])
+    env = DummyVecEnv([make_env])
+    eval_env = DummyVecEnv([make_env])
 
     # Apply VecFrameStack for frame stacking
     env = VecFrameStack(env, n_stack=n_stack)
@@ -90,7 +88,11 @@ def train_pong(use_atari_make=True):
         )
     else:
         raise ValueError(f"Unsupported algorithm: {algorithm}")
+    return model, env, eval_env
 
+
+if __name__ == "__main__":
+    model, env, eval_env = load_model_and_envs()
     # Create callbacks for checkpointing and evaluation
     checkpoint_callback = CheckpointCallback(save_freq=10000, save_path="./logs/")
     eval_callback = EvalCallback(
@@ -104,7 +106,7 @@ def train_pong(use_atari_make=True):
 
     # Train the model with callbacks
     model.learn(
-        total_timesteps=100000000, callback=[checkpoint_callback, eval_callback]
+        total_timesteps=10_000_000, callback=[checkpoint_callback, eval_callback]
     )
 
     # Save the trained model
@@ -113,8 +115,3 @@ def train_pong(use_atari_make=True):
     # Evaluate the trained model
     mean_reward, std_reward = evaluate_policy(model, eval_env, n_eval_episodes=10)
     print(f"Mean reward: {mean_reward} +/- {std_reward}")
-
-
-if __name__ == "__main__":
-    # Set use_atari_make to True to use make_atari_env, otherwise False for make_env
-    train_pong(use_atari_make=USE_ATARI_MAKE)

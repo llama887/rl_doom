@@ -1,28 +1,12 @@
 import json
+import os
 
-import gymnasium as gym
-import numpy as np
-from skimage.color import rgb2gray
+from gymnasium.wrappers import RecordVideo
 from stable_baselines3 import A2C, DQN, PPO
-from stable_baselines3.common.evaluation import evaluate_policy
-from stable_baselines3.common.monitor import Monitor
+from stable_baselines3.common.env_util import make_atari_env
 from stable_baselines3.common.vec_env import DummyVecEnv, VecFrameStack
 
-
-def make_env():
-    env = gym.make(
-        "ALE/SpaceInvaders-v5",
-        repeat_action_probability=0.0,
-        full_action_space=False,
-        render_mode="human",
-    )
-    env.metadata["render_fps"] = 30
-
-    # Convert to grayscale and reshape
-    env = gym.wrappers.TransformObservation(
-        env, lambda obs: np.expand_dims(rgb2gray(obs), axis=-1)
-    )
-    return Monitor(env)
+from train import make_env
 
 
 def load_hyperparameters(filename="best_hyperparameters.json"):
@@ -32,36 +16,71 @@ def load_hyperparameters(filename="best_hyperparameters.json"):
     return params
 
 
-def watch_trained_agent():
-    # Load the best hyperparameters
-    hyperparams = load_hyperparameters()
-    algorithm = hyperparams.pop("algorithm", "PPO")  # Default to PPO if not specified
-    n_stack = hyperparams.pop("n_stack", 4)
+def evaluate_best_model(
+    model_path,
+    hyperparameters_file="best_hyperparameters.json",
+    use_atari_make=True,
+    video_folder="videos/",
+    num_episodes=1,
+):
+    # Create the video folder if it doesn't exist
+    os.makedirs(video_folder, exist_ok=True)
 
-    # Force n_stack to be 1 if using DQN to avoid shape mismatches
+    # Load hyperparameters
+    hyperparameters = load_hyperparameters(hyperparameters_file)
+    algorithm = hyperparameters.get("algorithm", "PPO")
+    n_stack = hyperparameters.get("n_stack", 4)
+
+    # Override n_stack for DQN
     if algorithm == "DQN":
         n_stack = 1
 
-    # Create the environment with frame stacking
-    env = DummyVecEnv([make_env])
-    env = VecFrameStack(env, n_stack=n_stack)
+    # Choose the environment creation function
+    if use_atari_make:
+        base_env = make_atari_env("PongNoFrameskip-v4", n_envs=1)
+    else:
+        base_env = DummyVecEnv([make_env])
 
-    # Load the trained model based on the specified algorithm
+    # Wrap the base environment with RecordVideo first
+    video_env = RecordVideo(base_env, video_folder, episode_trigger=lambda x: True)
+
+    # Apply VecFrameStack after video recording
+    eval_env = VecFrameStack(video_env, n_stack=n_stack)
+
+    # Load the appropriate model
     if algorithm == "PPO":
-        model = PPO.load("logs/best_model", env=env)
+        model = PPO.load(model_path)
     elif algorithm == "A2C":
-        model = A2C.load("logs/best_model", env=env)
+        model = A2C.load(model_path)
     elif algorithm == "DQN":
-        model = DQN.load("logs/best_model", env=env)
+        model = DQN.load(model_path)
     else:
         raise ValueError(f"Unsupported algorithm: {algorithm}")
 
-    # Evaluate the trained model
-    mean_reward, std_reward = evaluate_policy(
-        model, env, n_eval_episodes=10, render=True
-    )
-    print(f"Mean reward: {mean_reward} +/- {std_reward}")
+    # Evaluate the model and save videos
+    total_rewards = []
+    for episode in range(num_episodes):
+        obs = eval_env.reset(options=None)
+        done = False
+        episode_reward = 0
+        while not done:
+            action, _ = model.predict(obs, deterministic=True)
+            obs, reward, done, info = eval_env.step(action)
+            episode_reward += reward
+
+        total_rewards.append(episode_reward)
+        print(f"Episode {episode + 1}: Reward = {episode_reward[0]}")
+
+    mean_reward = sum(total_rewards) / num_episodes
+    print(f"Mean reward over {num_episodes} episodes: {mean_reward}")
+
+    # Close the environment
+    eval_env.close()
 
 
 if __name__ == "__main__":
-    watch_trained_agent()
+    # Update the model path and hyperparameters file if needed
+    best_model_path = "logs/best_model.zip"
+    hyperparameters_file = "best_hyperparameters.json"
+
+    evaluate_best_model(best_model_path, hyperparameters_file=hyperparameters_file)

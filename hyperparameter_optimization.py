@@ -4,11 +4,10 @@ import optuna
 from optuna.pruners import MedianPruner
 from stable_baselines3 import A2C, DQN, PPO
 from stable_baselines3.common.callbacks import BaseCallback
-from stable_baselines3.common.env_util import make_atari_env
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.vec_env import DummyVecEnv, VecFrameStack
 
-from train import USE_ATARI_MAKE, make_env
+from train import make_env
 
 
 class TrialPruningCallback(BaseCallback):
@@ -110,15 +109,10 @@ def objective(trial):
     elif algorithm == "DQN":
         params = optimize_dqn(trial)
 
-    # Set up environments with the chosen frame stack setting
-    if USE_ATARI_MAKE:
-        env = make_atari_env("PongNoFrameskip-v4", n_envs=1, seed=0)
-        eval_env = make_atari_env("PongNoFrameskip-v4", n_envs=1, seed=0)
-    else:
-        env = DummyVecEnv([make_env])
-        env = VecFrameStack(env, n_stack=n_stack)
-        eval_env = DummyVecEnv([make_env])
-        eval_env = VecFrameStack(eval_env, n_stack=n_stack)
+    env = DummyVecEnv([make_env])
+    env = VecFrameStack(env, n_stack=n_stack)
+    eval_env = DummyVecEnv([make_env])
+    eval_env = VecFrameStack(eval_env, n_stack=n_stack)
 
     # Initialize the model based on the selected algorithm
     if algorithm == "PPO":
