@@ -1,13 +1,12 @@
 {
-	"name": "Template",
+	"name": "RL",
 	"build": {
 		"dockerfile": "Dockerfile"
 	},
 	"runArgs": [
-		"--gpus", "all", "--init", "-v", "${env:HOME}/.ssh:/root/.ssh"
+		"--gpus", "all","--init", "-v", "${env:HOME}/.ssh:/root/.ssh"
 	],
-	"postStartCommand": "dos2unix .devcontainer/postStart.sh && chmod +x .devcontainer/postStart.sh && .devcontainer/postStart.sh",
-	"remoteUser": "root",
+	"postStartCommand": "chmod +x .devcontainer/postStart.sh && .devcontainer/postStart.sh",
 	"customizations": {
 		"vscode": {
 			"extensions": [
@@ -26,9 +25,12 @@
 				"aaron-bond.better-comments",
 				"cardinal90.multi-cursor-case-preserve",
 				"shd101wyy.markdown-preview-enhanced",
-				"supermaven.supermaven",
-				"continue.continue",
-				"saoudrizwan.claude-dev"
+				"copilot-arena.copilot-arena",
+				"ms-toolsai.tensorboard",
+				"pkief.material-icon-theme",
+				"jeff-hykin.polacode-2019",
+				"streetsidesoftware.code-spell-checker",
+				"tomoki1207.pdf"
 			],
 			"settings": {
 				"[python]": {
@@ -46,8 +48,10 @@
 					"zsh": {
 						"path": "/bin/zsh"
 					}
-				}
+				},
+				"editor.codeLens": false
 			}
 		}
 	}
 }
+
