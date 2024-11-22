@@ -106,7 +106,7 @@ if __name__ == "__main__":
 
     # Train the model with callbacks
     model.learn(
-        total_timesteps=10_000_000, callback=[checkpoint_callback, eval_callback]
+        total_timesteps=5_000_000, callback=[checkpoint_callback, eval_callback]
     )
 
     # Save the trained model

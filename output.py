@@ -1,51 +1,22 @@
-import json
-import os
-
-from gymnasium.wrappers import RecordVideo
 from stable_baselines3 import A2C, DQN, PPO
-from stable_baselines3.common.env_util import make_atari_env
+from stable_baselines3.common.evaluation import evaluate_policy
+from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import DummyVecEnv, VecFrameStack
 
-from train import make_env
+from train import load_hyperparameters, make_env
 
 
-def load_hyperparameters(filename="best_hyperparameters.json"):
-    # Load the best hyperparameters from a JSON file
-    with open(filename, "r") as f:
-        params = json.load(f)
-    return params
-
-
-def evaluate_best_model(
-    model_path,
-    hyperparameters_file="best_hyperparameters.json",
-    use_atari_make=True,
-    video_folder="videos/",
-    num_episodes=1,
-):
-    # Create the video folder if it doesn't exist
-    os.makedirs(video_folder, exist_ok=True)
-
-    # Load hyperparameters
-    hyperparameters = load_hyperparameters(hyperparameters_file)
-    algorithm = hyperparameters.get("algorithm", "PPO")
-    n_stack = hyperparameters.get("n_stack", 4)
-
-    # Override n_stack for DQN
+def evaluate_best_model(model_path, algorithm="PPO", n_stack=4):
+    # Force n_stack to be 1 if using DQN
     if algorithm == "DQN":
         n_stack = 1
 
-    # Choose the environment creation function
-    if use_atari_make:
-        base_env = make_atari_env("PongNoFrameskip-v4", n_envs=1)
-    else:
-        base_env = DummyVecEnv([make_env])
+    # Create the evaluation environment with human render mode
+    def make_eval_env():
+        return Monitor(make_env(render_mode="human"))
 
-    # Wrap the base environment with RecordVideo first
-    video_env = RecordVideo(base_env, video_folder, episode_trigger=lambda x: True)
-
-    # Apply VecFrameStack after video recording
-    eval_env = VecFrameStack(video_env, n_stack=n_stack)
+    eval_env = DummyVecEnv([make_eval_env])  # Wrap in a vectorized environment
+    eval_env = VecFrameStack(eval_env, n_stack=n_stack)  # Apply frame stacking
 
     # Load the appropriate model
     if algorithm == "PPO":
@@ -57,30 +28,28 @@ def evaluate_best_model(
     else:
         raise ValueError(f"Unsupported algorithm: {algorithm}")
 
-    # Evaluate the model and save videos
-    total_rewards = []
-    for episode in range(num_episodes):
-        obs = eval_env.reset(options=None)
-        done = False
-        episode_reward = 0
-        while not done:
-            action, _ = model.predict(obs, deterministic=True)
-            obs, reward, done, info = eval_env.step(action)
-            episode_reward += reward
+    # Evaluate the model
+    mean_reward, std_reward = evaluate_policy(model, eval_env, n_eval_episodes=10)
+    print(f"Mean reward: {mean_reward} +/- {std_reward}")
 
-        total_rewards.append(episode_reward)
-        print(f"Episode {episode + 1}: Reward = {episode_reward[0]}")
+    # Render a single evaluation episode
+    obs = eval_env.reset()
+    done = [False]
+    while not done[0]:  # Handle batched environments
+        action, _ = model.predict(obs)
+        obs, rewards, done, infos = eval_env.step(action)
+        eval_env.render()
 
-    mean_reward = sum(total_rewards) / num_episodes
-    print(f"Mean reward over {num_episodes} episodes: {mean_reward}")
-
-    # Close the environment
+    # Close the rendering
     eval_env.close()
 
 
 if __name__ == "__main__":
-    # Update the model path and hyperparameters file if needed
-    best_model_path = "logs/best_model.zip"
-    hyperparameters_file = "best_hyperparameters.json"
+    # Update the model path and algorithm if needed
+    best_model_path = "./logs/best_model.zip"
 
-    evaluate_best_model(best_model_path, hyperparameters_file=hyperparameters_file)
+    params = load_hyperparameters()
+    algorithm = params.pop("algorithm", "PPO")
+    n_stack = params.pop("n_stack", 4)
+
+    evaluate_best_model(best_model_path, algorithm=algorithm, n_stack=n_stack)
