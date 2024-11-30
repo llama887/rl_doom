@@ -42,7 +42,7 @@ class RewardCNN(nn.Module):
         cnn_out = self.conv2(cnn_out)
         cnn_out = F.relu(cnn_out)
         cnn_out = cnn_out.view(state.size(0), -1)  # Flatten CNN output
-        print(f"Shape after flattening CNN output: {cnn_out.shape}")
+        #print(f"Shape after flattening CNN output: {cnn_out.shape}")
 
         cnn_out = self.fc1(cnn_out)
         cnn_out = F.relu(cnn_out)
@@ -192,14 +192,14 @@ class StateActionRewardDataset(Dataset):
 
         # Ensure state has 4 dimensions (e.g., (H, W, C)) before permuting
         if state.ndim == 4:
-            state = torch.tensor(state, dtype=torch.float32).squeeze(0).permute(2, 0, 1)  # (1, H, W, C) -> (C, H, W)
+            state = state.clone().detach().float().squeeze(0).permute(2, 0, 1)  # (1, H, W, C) -> (C, H, W)
         elif state.ndim == 3:
-            state = torch.tensor(state, dtype=torch.float32).permute(2, 0, 1)  # (H, W, C) -> (C, H, W)
+            state = state.clone().detach().float().permute(2, 0, 1)  # (H, W, C) -> (C, H, W)
         else:
             raise ValueError(f"Unexpected state shape: {state.shape}. Expected 3 or 4 dimensions.")
 
-        action = torch.tensor(action, dtype=torch.float32)  # One-hot action
-        reward = torch.tensor(reward, dtype=torch.float32)
+        action = action.clone().detach().float()  # One-hot action
+        reward = reward.clone().detach().float()
 
         return state, action, reward
 
@@ -325,6 +325,10 @@ if __name__ == "__main__":
     states_tensor = torch.tensor(states, dtype=torch.float32)
     actions_tensor = torch.tensor(actions, dtype=torch.float32)
     rewards_tensor = torch.tensor(rewards, dtype=torch.float32)
+    # states_tensor = torch.from_numpy(states).float().clone().detach()
+    # actions_tensor = torch.from_numpy(actions).float().clone().detach()
+    # rewards_tensor = torch.from_numpy(rewards).float().clone().detach()
+
 
     print("States tensor shape:", states_tensor.shape)
     print("Actions tensor shape:", actions_tensor.shape)
@@ -357,43 +361,77 @@ if __name__ == "__main__":
     optimizer = optim.Adam(reward_model.parameters(), lr=0.001)
     # optimizer = optim.Adam(cnn_model.parameters(), lr=0.001)
 
-    # Training loop
-    for epoch in range(10):  # Number of epochs
+    num_epochs = 10
+    reward_model.train()
+
+    for epoch in range(num_epochs):
+        epoch_loss = 0.0
         for state, action, reward in dataloader:
-            print(f'(state.shape : {state.shape}, action shape: {action.shape}, reward shape : {reward.shape})')
+            # Move data to appropriate format
+            state = state.to(torch.float32)
+            action = action.to(torch.float32)
+            reward = reward.to(torch.float32).unsqueeze(1)  # Ensure reward has shape (batch_size, 1)
+
+            # Zero gradients
             optimizer.zero_grad()
+
+            # Forward pass
             predicted_reward = reward_model(state, action)
-            # predicted_reward = cnn_model(state, action)
-            loss = criterion(predicted_reward, reward.unsqueeze(1))
+
+            # Compute loss
+            # loss = criterion(predicted_reward, reward)
+            reward = reward.squeeze(1)  # Remove the extra dimension if necessary
+            loss = criterion(predicted_reward, reward)
+            
+            # Backward pass and optimization
             loss.backward()
             optimizer.step()
 
-        print(f"Epoch {epoch + 1}, Loss: {loss.item()}")
+            # Accumulate loss
+            epoch_loss += loss.item()
 
-    rewarded_env = RewardWrapper(env, reward_model)
+        print(f"Epoch {epoch + 1}/{num_epochs}, Loss: {epoch_loss:.4f}")
+
+    # Step 6: Save the trained model
+    torch.save(reward_model.state_dict(), "reward_model.pth")
+    print("Training complete and model saved.")
+    # Training loop
+    # for epoch in range(10):  # Number of epochs
+    #     for state, action, reward in dataloader:
+    #         print(f'(state.shape : {state.shape}, action shape: {action.shape}, reward shape : {reward.shape})')
+    #         optimizer.zero_grad()
+    #         predicted_reward = reward_model(state, action)
+    #         # predicted_reward = cnn_model(state, action)
+    #         loss = criterion(predicted_reward, reward.unsqueeze(1))
+    #         loss.backward()
+    #         optimizer.step()
+
+    #     print(f"Epoch {epoch + 1}, Loss: {loss.item()}")
+
+    # rewarded_env = RewardWrapper(env, reward_model)
     # rewarded_env = RewardWrapper(env, cnn_model)
     
 
-    # Create the PPO model
-    model = PPO(
-        "CnnPolicy", 
-        rewarded_env, 
-        verbose=1, 
-        tensorboard_log="./tensorboard_logs/"
-    )
+    # # Create the PPO model
+    # model = PPO(
+    #     "CnnPolicy", 
+    #     rewarded_env, 
+    #     verbose=1, 
+    #     tensorboard_log="./tensorboard_logs/"
+    # )
 
-    # Create a callback to save checkpoints
-    checkpoint_callback = CheckpointCallback(
-        save_freq=10000,  # Save model every 10,000 timesteps
-        save_path="./checkpoints_cnn/",  # Directory to save checkpoints
-        name_prefix="cnn_reward_pong"  # Prefix for checkpoint files
-    )
+    # # Create a callback to save checkpoints
+    # checkpoint_callback = CheckpointCallback(
+    #     save_freq=10000,  # Save model every 10,000 timesteps
+    #     save_path="./checkpoints_cnn/",  # Directory to save checkpoints
+    #     name_prefix="cnn_reward_pong"  # Prefix for checkpoint files
+    # )
 
-    # Train the PPO model with the checkpoint callback
-    model.learn(
-        total_timesteps=5_000_000, 
-        callback=checkpoint_callback
-    )
+    # # Train the PPO model with the checkpoint callback
+    # model.learn(
+    #     total_timesteps=5_000_000, 
+    #     callback=checkpoint_callback
+    # )
 
     # Save the final trained PPO model
-    model.save("cnn_reward_pong_model")
+    # model.save("cnn_reward_pong_model")
