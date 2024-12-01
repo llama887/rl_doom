@@ -33,9 +33,6 @@ RUN (type -p wget >/dev/null || (apt update && apt-get install wget -y)) \
 # Copy uv from the official distroless Docker image
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-# Verify uv installation (optional)
-RUN uvx pycowsay 'hello world!'
-
 # Copy your requirements.txt first (this is to cache dependencies installation)
 COPY requirements.txt /tmp/requirements.txt
 

@@ -1,12 +1,17 @@
 ai_dev/
 aider.sh
 *.zip
+*.npz
 logs/
 tensorboard_logs/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
+.vscode/
+*.pth
+*.npy
+*.png
 
 # C extensions
 *.so
