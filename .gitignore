@@ -8,6 +8,10 @@ tensorboard_logs/
 __pycache__/
 *.py[cod]
 *$py.class
+.vscode/
+*.pth
+*.npy
+*.png
 
 # C extensions
 *.so

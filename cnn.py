@@ -2,7 +2,7 @@ import json
 import os.path
 
 import gymnasium as gym
-import matplotlib as plt
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
@@ -60,7 +60,8 @@ class RewardCNN(nn.Module):
 def collect_data(model, env, n_episodes=100):
     states, actions, rewards = [], [], []
 
-    for _ in range(n_episodes):
+    for ep in range(n_episodes):
+        print(f"Starting EP: {ep}/{n_episodes}")
         obs = env.reset()
         done = False
         while not done:
@@ -83,7 +84,6 @@ def Collect_Reward_Pairs(env, model, sample_steps=10000):
         action, _ = model.predict(obs)  # Agent's action
         next_obs, reward, done, info = env.step(action)
 
-        # Print shape of state for debugging
         print(f"Shape of state (obs) before processing: {obs.shape}")
 
         # Convert state to a PyTorch tensor and ensure it has the right shape
@@ -128,11 +128,11 @@ def Collect_Reward_Pairs(env, model, sample_steps=10000):
     print([x[0].shape for x in state_action_reward_data])
 
     # Check shapes of state components
-    print("Check shapes of states in the dataset:")
-    for idx, (state, action, reward) in enumerate(state_action_reward_data):
-        print(
-            f"Index {idx}: State shape = {state.shape}, Action = {action}, Reward = {reward}"
-        )
+    # print("Check shapes of states in the dataset:")
+    # for idx, (state, action, reward) in enumerate(state_action_reward_data):
+    #     print(
+    #         f"Index {idx}: State shape = {state.shape}, Action = {action}, Reward = {reward}"
+    #     )
 
 
 class RewardWrapper(gym.RewardWrapper):
@@ -273,7 +273,7 @@ if __name__ == "__main__":
 
     if not generate_npz_file:
         # Collect data from the model and environment
-        states, actions, rewards = collect_data(model, env, 1_000_000)
+        states, actions, rewards = collect_data(model, env, 10)
 
         # Save data for supervised training in a .npz file
         np.savez("cnn_pong_data.npz", states=states, actions=actions, rewards=rewards)
@@ -355,7 +355,7 @@ if __name__ == "__main__":
         for state, action, reward in train_loader:
             state = state.to(device, dtype=torch.float32)
             action = action.to(device, dtype=torch.float32)
-            reward = reward.to(device, dtype=torch.float32).unsqueeze(1)
+            reward = reward.to(device, dtype=torch.float32).view(-1, 1)
 
             optimizer.zero_grad()
             predicted_reward = reward_model(state, action)
@@ -377,7 +377,7 @@ if __name__ == "__main__":
             for state, action, reward in val_loader:
                 state = state.to(device, dtype=torch.float32)
                 action = action.to(device, dtype=torch.float32)
-                reward = reward.to(device, dtype=torch.float32).unsqueeze(1)
+                reward = reward.to(device, dtype=torch.float32).view(-1, 1)
 
                 predicted_reward = reward_model(state, action)
                 loss = criterion(predicted_reward, reward)
@@ -402,7 +402,7 @@ if __name__ == "__main__":
     plt.ylabel("Loss")
     plt.title("Training and Validation Loss")
     plt.legend()
-    plt.show()
+    plt.savefig("loss.png")
 
     # Plot training and validation accuracy
     plt.figure(figsize=(12, 6))
@@ -412,7 +412,7 @@ if __name__ == "__main__":
     plt.ylabel("Accuracy")
     plt.title("Training and Validation Accuracy")
     plt.legend()
-    plt.show()
+    plt.savefig("accuracy.png")
 
     # Save the trained model
     torch.save(reward_model.state_dict(), "reward_model.pth")
