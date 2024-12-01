@@ -1,6 +1,9 @@
 import gymnasium as gym
+import sklearn
 import stable_baselines3
 import torch
+
+print("Scikit learn:", sklearn.__version__)
 
 print("Gym version:", gym.__version__)
 print("Stable-Baselines3 version:", stable_baselines3.__version__)

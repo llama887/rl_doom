@@ -2,11 +2,13 @@ import json
 import os.path
 
 import gymnasium as gym
+import matplotlib as plt
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+from sklearn.model_selection import train_test_split
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv, VecFrameStack
 from torch.utils.data import DataLoader, Dataset
@@ -238,6 +240,13 @@ def load_hyperparameters(filename="best_hyperparameters.json"):
     return params
 
 
+def calculate_accuracy(predicted, actual):
+    # Convert to binary accuracy for simplicity (e.g., classify positive/negative rewards)
+    predicted_classes = (predicted > 0.5).float()
+    actual_classes = (actual > 0.5).float()
+    return (predicted_classes == actual_classes).float().mean().item()
+
+
 if __name__ == "__main__":
     # Load and preprocess data
     hyperparameters = load_hyperparameters()
@@ -292,11 +301,32 @@ if __name__ == "__main__":
     print("Actions tensor shape:", actions_tensor.shape)
     print("Rewards tensor shape:", rewards_tensor.shape)
 
-    dataset = StateActionRewardDataset(states_tensor, actions_tensor, rewards_tensor)
-    dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
+    # Split the dataset into training and validation sets
+    train_states, val_states, train_actions, val_actions, train_rewards, val_rewards = (
+        train_test_split(
+            states_tensor,
+            actions_tensor,
+            rewards_tensor,
+            test_size=0.2,
+            random_state=42,
+        )
+    )
+
+    # Create DataLoaders for training and validation sets
+    train_dataset = StateActionRewardDataset(train_states, train_actions, train_rewards)
+    val_dataset = StateActionRewardDataset(val_states, val_actions, val_rewards)
+
+    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
+
+    # Initialize variables for tracking losses and accuracy
+    train_losses = []
+    val_losses = []
+    train_accuracies = []
+    val_accuracies = []
 
     # Iterate through the DataLoader
-    for batch in dataloader:
+    for batch in train_loader:
         state, action, reward = batch
         print(state.shape, action.shape, reward.shape)
         break  # Print only the first batch
@@ -315,33 +345,74 @@ if __name__ == "__main__":
     criterion = nn.MSELoss()  # Regression loss for reward
     optimizer = optim.Adam(reward_model.parameters(), lr=0.001)
 
-    # Update DataLoader loop to move data to the GPU
+    # Training loop with validation
+    num_epochs = 10
     for epoch in range(num_epochs):
-        epoch_loss = 0.0
-        for state, action, reward in dataloader:
-            # Move data to the appropriate device
+        # Training phase
+        reward_model.train()
+        train_loss = 0.0
+        train_accuracy = 0.0
+        for state, action, reward in train_loader:
             state = state.to(device, dtype=torch.float32)
             action = action.to(device, dtype=torch.float32)
             reward = reward.to(device, dtype=torch.float32).unsqueeze(1)
 
-            # Zero gradients
             optimizer.zero_grad()
-
-            # Forward pass
             predicted_reward = reward_model(state, action)
-
-            # Compute loss
-            reward = reward.squeeze(1)  # Remove the extra dimension if necessary
             loss = criterion(predicted_reward, reward)
-
-            # Backward pass and optimization
             loss.backward()
             optimizer.step()
 
-            # Accumulate loss
-            epoch_loss += loss.item()
+            train_loss += loss.item()
+            train_accuracy += calculate_accuracy(predicted_reward, reward)
 
-        print(f"Epoch {epoch + 1}/{num_epochs}, Loss: {epoch_loss:.4f}")
+        train_losses.append(train_loss / len(train_loader))
+        train_accuracies.append(train_accuracy / len(train_loader))
+
+        # Validation phase
+        reward_model.eval()
+        val_loss = 0.0
+        val_accuracy = 0.0
+        with torch.no_grad():
+            for state, action, reward in val_loader:
+                state = state.to(device, dtype=torch.float32)
+                action = action.to(device, dtype=torch.float32)
+                reward = reward.to(device, dtype=torch.float32).unsqueeze(1)
+
+                predicted_reward = reward_model(state, action)
+                loss = criterion(predicted_reward, reward)
+
+                val_loss += loss.item()
+                val_accuracy += calculate_accuracy(predicted_reward, reward)
+
+        val_losses.append(val_loss / len(val_loader))
+        val_accuracies.append(val_accuracy / len(val_loader))
+
+        print(
+            f"Epoch {epoch + 1}/{num_epochs}, Train Loss: {train_losses[-1]:.4f}, "
+            f"Validation Loss: {val_losses[-1]:.4f}, Train Accuracy: {train_accuracies[-1]:.4f}, "
+            f"Validation Accuracy: {val_accuracies[-1]:.4f}"
+        )
+
+    # Plot training and validation loss
+    plt.figure(figsize=(12, 6))
+    plt.plot(range(1, num_epochs + 1), train_losses, label="Training Loss")
+    plt.plot(range(1, num_epochs + 1), val_losses, label="Validation Loss")
+    plt.xlabel("Epochs")
+    plt.ylabel("Loss")
+    plt.title("Training and Validation Loss")
+    plt.legend()
+    plt.show()
+
+    # Plot training and validation accuracy
+    plt.figure(figsize=(12, 6))
+    plt.plot(range(1, num_epochs + 1), train_accuracies, label="Training Accuracy")
+    plt.plot(range(1, num_epochs + 1), val_accuracies, label="Validation Accuracy")
+    plt.xlabel("Epochs")
+    plt.ylabel("Accuracy")
+    plt.title("Training and Validation Accuracy")
+    plt.legend()
+    plt.show()
 
     # Save the trained model
     torch.save(reward_model.state_dict(), "reward_model.pth")

@@ -1,6 +1,7 @@
 ai_dev/
 aider.sh
 *.zip
+*.npz
 logs/
 tensorboard_logs/
 # Byte-compiled / optimized / DLL files
