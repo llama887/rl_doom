@@ -1,28 +1,22 @@
+import json
+import os.path
+
+import gymnasium as gym
+import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
-import json
-
-import os.path
-import gymnasium as gym
-from stable_baselines3 import A2C, DQN, PPO
-from stable_baselines3.common.atari_wrappers import (
-    ClipRewardEnv,
-    EpisodicLifeEnv,
-    FireResetEnv,
-    MaxAndSkipEnv,
-    NoopResetEnv,
-    WarpFrame,
-)
-from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
-from stable_baselines3.common.evaluation import evaluate_policy
-from stable_baselines3.common.monitor import Monitor
-from stable_baselines3.common.vec_env import DummyVecEnv, VecFrameStack
-
-
 from stable_baselines3 import PPO
-from stable_baselines3.common.vec_env import DummyVecEnv
-import numpy as np
+from stable_baselines3.common.vec_env import DummyVecEnv, VecFrameStack
+from torch.utils.data import DataLoader, Dataset
+
+from train import make_env
+
+# Check for GPU availability and set the device
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Using device: {device}")
+
 
 class RewardCNN(nn.Module):
     def __init__(self, state_shape, action_dim):
@@ -31,10 +25,11 @@ class RewardCNN(nn.Module):
         self.conv2 = nn.Conv2d(16, 32, kernel_size=4, stride=2)
 
         # Calculate the flattened size after conv layers
-        self.flattened_size = 2592  # This matches the shape printed in your debug output
+        self.flattened_size = (
+            2592  # This matches the shape printed in your debug output
+        )
         self.fc1 = nn.Linear(self.flattened_size, 256)
         self.fc2 = nn.Linear(257, 1)  # Change the input size to 257 if needed
-
 
     def forward(self, state, action):
         cnn_out = self.conv1(state)
@@ -42,13 +37,15 @@ class RewardCNN(nn.Module):
         cnn_out = self.conv2(cnn_out)
         cnn_out = F.relu(cnn_out)
         cnn_out = cnn_out.view(state.size(0), -1)  # Flatten CNN output
-        #print(f"Shape after flattening CNN output: {cnn_out.shape}")
+        # print(f"Shape after flattening CNN output: {cnn_out.shape}")
 
         cnn_out = self.fc1(cnn_out)
         cnn_out = F.relu(cnn_out)
 
         # Ensure action has the correct shape (batch_size, action_dim)
-        action = action.view(action.size(0), -1)  # Ensure action has shape (batch_size, 1)
+        action = action.view(
+            action.size(0), -1
+        )  # Ensure action has shape (batch_size, 1)
 
         # Concatenate CNN output and action
         combined_input = torch.cat((cnn_out, action), dim=1)
@@ -57,21 +54,6 @@ class RewardCNN(nn.Module):
         predicted_reward = self.fc2(combined_input)
         return predicted_reward
 
-
-def make_env(render_mode=None):
-    env = gym.make(
-        "ALE/Pong-v5",
-        repeat_action_probability=0.0,
-        full_action_space=False,
-        render_mode=render_mode,
-    )
-    env = NoopResetEnv(env, noop_max=30)
-    env = MaxAndSkipEnv(env, skip=4)
-    env = FireResetEnv(env)
-    env = WarpFrame(env)
-    env = ClipRewardEnv(env)
-    env = EpisodicLifeEnv(env)
-    return Monitor(env)
 
 def collect_data(model, env, n_episodes=100):
     states, actions, rewards = [], [], []
@@ -90,13 +72,12 @@ def collect_data(model, env, n_episodes=100):
     return np.array(states), np.array(actions), np.array(rewards)
 
 
-
-def Collect_Reward_Pairs(env, model):
+def Collect_Reward_Pairs(env, model, sample_steps=10000):
     # Collect data
     state_action_reward_data = []
     obs = env.reset()
 
-    for _ in range(10000):  # Number of steps to sample
+    for _ in range(sample_steps):  # Number of steps to sample
         action, _ = model.predict(obs)  # Agent's action
         next_obs, reward, done, info = env.step(action)
 
@@ -112,9 +93,13 @@ def Collect_Reward_Pairs(env, model):
 
         # Ensure the state has 4 dimensions: (batch_size, channels, height, width)
         if len(state.shape) == 4:
-            state = state.permute(0, 3, 1, 2)  # Rearrange to (batch_size, channels, height, width)
+            state = state.permute(
+                0, 3, 1, 2
+            )  # Rearrange to (batch_size, channels, height, width)
         else:
-            raise ValueError(f"Unexpected state shape: {state.shape}. Expected 4 dimensions.")
+            raise ValueError(
+                f"Unexpected state shape: {state.shape}. Expected 4 dimensions."
+            )
 
         # Save the state, action, and reward
         state_action_reward_data.append((state, action, reward))
@@ -126,9 +111,11 @@ def Collect_Reward_Pairs(env, model):
     # Convert to a structured numpy array for saving
     state_action_reward_data_array = []
     for state, action, reward in state_action_reward_data:
-        state_action_reward_data_array.append((state.squeeze(), np.array(action), np.array(reward)))
+        state_action_reward_data_array.append(
+            (state.squeeze(), np.array(action), np.array(reward))
+        )
 
-    dtype = [('state', 'O'), ('action', 'O'), ('reward', 'O')]
+    dtype = [("state", "O"), ("action", "O"), ("reward", "O")]
     structured_array = np.array(state_action_reward_data_array, dtype=dtype)
 
     # Save the collected data
@@ -141,30 +128,31 @@ def Collect_Reward_Pairs(env, model):
     # Check shapes of state components
     print("Check shapes of states in the dataset:")
     for idx, (state, action, reward) in enumerate(state_action_reward_data):
-        print(f"Index {idx}: State shape = {state.shape}, Action = {action}, Reward = {reward}")
+        print(
+            f"Index {idx}: State shape = {state.shape}, Action = {action}, Reward = {reward}"
+        )
 
-import torch.nn.functional as F
 
-
-
-    
 class RewardWrapper(gym.RewardWrapper):
     def __init__(self, env, reward_model):
         super().__init__(env)
         self.reward_model = reward_model
 
     def reward(self, reward):
-        state = torch.tensor(self.env.state, dtype=torch.float32).unsqueeze(0)
-        action = torch.tensor(self.env.last_action, dtype=torch.float32).unsqueeze(0)
+        state = (
+            torch.tensor(self.env.state, dtype=torch.float32).unsqueeze(0).to(device)
+        )
+        action = (
+            torch.tensor(self.env.last_action, dtype=torch.float32)
+            .unsqueeze(0)
+            .to(device)
+        )
         predicted_reward = self.reward_model(state, action).item()
         return predicted_reward
 
+
 # Wrap the environment
 
-
-
-import torch
-from torch.utils.data import Dataset, DataLoader
 
 class StateActionRewardDataset(Dataset):
     def __init__(self, states, actions, rewards):
@@ -182,7 +170,6 @@ class StateActionRewardDataset(Dataset):
         return len(self.states)
 
     def __getitem__(self, idx):
-        
         state = self.states[idx]
         action = self.actions[idx]
         reward = self.rewards[idx]
@@ -192,11 +179,17 @@ class StateActionRewardDataset(Dataset):
 
         # Ensure state has 4 dimensions (e.g., (H, W, C)) before permuting
         if state.ndim == 4:
-            state = state.clone().detach().float().squeeze(0).permute(2, 0, 1)  # (1, H, W, C) -> (C, H, W)
+            state = (
+                state.clone().detach().float().squeeze(0).permute(2, 0, 1)
+            )  # (1, H, W, C) -> (C, H, W)
         elif state.ndim == 3:
-            state = state.clone().detach().float().permute(2, 0, 1)  # (H, W, C) -> (C, H, W)
+            state = (
+                state.clone().detach().float().permute(2, 0, 1)
+            )  # (H, W, C) -> (C, H, W)
         else:
-            raise ValueError(f"Unexpected state shape: {state.shape}. Expected 3 or 4 dimensions.")
+            raise ValueError(
+                f"Unexpected state shape: {state.shape}. Expected 3 or 4 dimensions."
+            )
 
         action = action.clone().detach().float()  # One-hot action
         reward = reward.clone().detach().float()
@@ -204,52 +197,28 @@ class StateActionRewardDataset(Dataset):
         return state, action, reward
 
 
-# Example usage:
-# Assuming you have collected states, actions, and rewards as numpy arrays
-# dataset = StateActionRewardDataset(states, actions, rewards)
-# dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
-
-
-
-
-
-
-# def Train(env):
-#     # Initialize the model, loss, and optimizer
-#     action_dim = env.action_space.n
-#     state_shape = env.observation_space.shape
-#     reward_model = RewardCNN(action_dim, state_shape)
-#     criterion = nn.MSELoss()  # Regression loss for reward
-#     optimizer = optim.Adam(reward_model.parameters(), lr=0.001)
-
-#     # Training loop
-#     for epoch in range(10):  # Number of epochs
-#         for state, action, reward in dataloader:
-#             optimizer.zero_grad()
-#             predicted_reward = reward_model(state, action)
-#             loss = criterion(predicted_reward, reward.unsqueeze(1))
-#             loss.backward()
-#             optimizer.step()
-
-#         print(f"Epoch {epoch + 1}, Loss: {loss.item()}")
-
-import torch
-import torch.nn as nn
-
 class CNNModel(nn.Module):
     def __init__(self, state_shape, action_dim):
         super(CNNModel, self).__init__()
-        in_channels = state_shape[0]  # The number of channels in the input state (e.g., 6 for RGB)
+        in_channels = state_shape[
+            0
+        ]  # The number of channels in the input state (e.g., 6 for RGB)
 
         self.cnn = nn.Sequential(
-            nn.Conv2d(in_channels=in_channels, out_channels=32, kernel_size=8, stride=4, padding=3),
+            nn.Conv2d(
+                in_channels=in_channels,
+                out_channels=32,
+                kernel_size=8,
+                stride=4,
+                padding=3,
+            ),
             nn.ReLU(),
             nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=1),
             nn.ReLU(),
             nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1),
             nn.ReLU(),
         )
-        
+
         # Assuming the input size is (6, 84, 84), calculate the output shape after CNN layers
         # Adjust based on your input dimensions
         self.fc_input_dim = 64 * (state_shape[1] // 8) * (state_shape[2] // 8)
@@ -277,8 +246,6 @@ if __name__ == "__main__":
     )  # Default to PPO if not specified
     n_stack = hyperparameters.pop("n_stack", 4)
 
-
-
     # Initialize environment and trained model
     # Choose the environment creation function
     env = DummyVecEnv([make_env])
@@ -293,12 +260,11 @@ if __name__ == "__main__":
     # Load the trained PPO model
     model = PPO.load(model_path)
 
-    generate_npz_file = os.path.isfile('cnn_pong_data.npz')
-    # print(generate_npz_file)
-    
+    generate_npz_file = os.path.isfile("cnn_pong_data.npz")
+
     if not generate_npz_file:
         # Collect data from the model and environment
-        states, actions, rewards = collect_data(model, env)
+        states, actions, rewards = collect_data(model, env, 1_000_000)
 
         # Save data for supervised training in a .npz file
         np.savez("cnn_pong_data.npz", states=states, actions=actions, rewards=rewards)
@@ -306,39 +272,25 @@ if __name__ == "__main__":
         print("Data collection complete. Saved to 'cnn_pong_data.npz'.")
         Collect_Reward_Pairs(env, model)
 
-
-
-    
     data = np.load("cnn_pong_data.npz", allow_pickle=True)
 
     # Assuming each entry in `data` is a tuple (state, action, reward)
     # Extract states, actions, and rewards separately
-    states = data['states']
-    actions = data['actions']
-    rewards = data['rewards']
+    states = data["states"]
+    actions = data["actions"]
+    rewards = data["rewards"]
 
     print("States shape:", states.shape)
     print("Actions shape:", actions.shape)
     print("Rewards shape:", rewards.shape)
 
-    # Convert numpy arrays to PyTorch tensors
-    states_tensor = torch.tensor(states, dtype=torch.float32)
-    actions_tensor = torch.tensor(actions, dtype=torch.float32)
-    rewards_tensor = torch.tensor(rewards, dtype=torch.float32)
-    # states_tensor = torch.from_numpy(states).float().clone().detach()
-    # actions_tensor = torch.from_numpy(actions).float().clone().detach()
-    # rewards_tensor = torch.from_numpy(rewards).float().clone().detach()
-
+    states_tensor = torch.tensor(states, dtype=torch.float32).to(device)
+    actions_tensor = torch.tensor(actions, dtype=torch.float32).to(device)
+    rewards_tensor = torch.tensor(rewards, dtype=torch.float32).to(device)
 
     print("States tensor shape:", states_tensor.shape)
     print("Actions tensor shape:", actions_tensor.shape)
     print("Rewards tensor shape:", rewards_tensor.shape)
-
-    
-    # print("Type of data:", type(data))
-    # for key in data.files:
-    #     print(f"Array '{key}':")
-    #     print(data[key])
 
     dataset = StateActionRewardDataset(states_tensor, actions_tensor, rewards_tensor)
     dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
@@ -349,28 +301,28 @@ if __name__ == "__main__":
         print(state.shape, action.shape, reward.shape)
         break  # Print only the first batch
 
-
-
     # Initialize the model, loss, and optimizer
     action_dim = env.action_space.n
     state_shape = env.observation_space.shape
-    print(f'action dim : {action_dim} , and state_shape : {state_shape}')
-    reward_model = RewardCNN(state_shape, action_dim)
-    # cnn_model = CNNModel(state_shape, action_dim)
-    criterion = nn.MSELoss()  # Regression loss for reward
-    optimizer = optim.Adam(reward_model.parameters(), lr=0.001)
-    # optimizer = optim.Adam(cnn_model.parameters(), lr=0.001)
+    print(f"action dim : {action_dim} , and state_shape : {state_shape}")
 
+    # Initialize the model and move it to the device
+    reward_model = RewardCNN(state_shape, action_dim).to(device)
     num_epochs = 10
     reward_model.train()
 
+    # cnn_model = CNNModel(state_shape, action_dim)
+    criterion = nn.MSELoss()  # Regression loss for reward
+    optimizer = optim.Adam(reward_model.parameters(), lr=0.001)
+
+    # Update DataLoader loop to move data to the GPU
     for epoch in range(num_epochs):
         epoch_loss = 0.0
         for state, action, reward in dataloader:
-            # Move data to appropriate format
-            state = state.to(torch.float32)
-            action = action.to(torch.float32)
-            reward = reward.to(torch.float32).unsqueeze(1)  # Ensure reward has shape (batch_size, 1)
+            # Move data to the appropriate device
+            state = state.to(device, dtype=torch.float32)
+            action = action.to(device, dtype=torch.float32)
+            reward = reward.to(device, dtype=torch.float32).unsqueeze(1)
 
             # Zero gradients
             optimizer.zero_grad()
@@ -379,10 +331,9 @@ if __name__ == "__main__":
             predicted_reward = reward_model(state, action)
 
             # Compute loss
-            # loss = criterion(predicted_reward, reward)
             reward = reward.squeeze(1)  # Remove the extra dimension if necessary
             loss = criterion(predicted_reward, reward)
-            
+
             # Backward pass and optimization
             loss.backward()
             optimizer.step()
@@ -392,46 +343,6 @@ if __name__ == "__main__":
 
         print(f"Epoch {epoch + 1}/{num_epochs}, Loss: {epoch_loss:.4f}")
 
-    # Step 6: Save the trained model
+    # Save the trained model
     torch.save(reward_model.state_dict(), "reward_model.pth")
     print("Training complete and model saved.")
-    # Training loop
-    # for epoch in range(10):  # Number of epochs
-    #     for state, action, reward in dataloader:
-    #         print(f'(state.shape : {state.shape}, action shape: {action.shape}, reward shape : {reward.shape})')
-    #         optimizer.zero_grad()
-    #         predicted_reward = reward_model(state, action)
-    #         # predicted_reward = cnn_model(state, action)
-    #         loss = criterion(predicted_reward, reward.unsqueeze(1))
-    #         loss.backward()
-    #         optimizer.step()
-
-    #     print(f"Epoch {epoch + 1}, Loss: {loss.item()}")
-
-    # rewarded_env = RewardWrapper(env, reward_model)
-    # rewarded_env = RewardWrapper(env, cnn_model)
-    
-
-    # # Create the PPO model
-    # model = PPO(
-    #     "CnnPolicy", 
-    #     rewarded_env, 
-    #     verbose=1, 
-    #     tensorboard_log="./tensorboard_logs/"
-    # )
-
-    # # Create a callback to save checkpoints
-    # checkpoint_callback = CheckpointCallback(
-    #     save_freq=10000,  # Save model every 10,000 timesteps
-    #     save_path="./checkpoints_cnn/",  # Directory to save checkpoints
-    #     name_prefix="cnn_reward_pong"  # Prefix for checkpoint files
-    # )
-
-    # # Train the PPO model with the checkpoint callback
-    # model.learn(
-    #     total_timesteps=5_000_000, 
-    #     callback=checkpoint_callback
-    # )
-
-    # Save the final trained PPO model
-    # model.save("cnn_reward_pong_model")
