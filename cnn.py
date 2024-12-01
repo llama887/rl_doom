@@ -75,16 +75,16 @@ def collect_data(model, env, n_episodes=100):
     return np.array(states), np.array(actions), np.array(rewards)
 
 
-def Collect_Reward_Pairs(env, model, sample_steps=10000):
+def Collect_Reward_Pairs(env, model, sample_steps=1000):
     # Collect data
     state_action_reward_data = []
     obs = env.reset()
 
-    for _ in range(sample_steps):  # Number of steps to sample
+    for ss in range(sample_steps):  # Number of steps to sample
+        if ss % 50:
+            print(f"Sampling {ss}/sample_steps")
         action, _ = model.predict(obs)  # Agent's action
         next_obs, reward, done, info = env.step(action)
-
-        print(f"Shape of state (obs) before processing: {obs.shape}")
 
         # Convert state to a PyTorch tensor and ensure it has the right shape
         state = torch.tensor(obs, dtype=torch.float32)
@@ -124,8 +124,8 @@ def Collect_Reward_Pairs(env, model, sample_steps=10000):
     np.save("state_action_reward_data.npy", structured_array)
 
     print("Data collection complete.")
-    print("Shape of state in each tuple:")
-    print([x[0].shape for x in state_action_reward_data])
+    # print("Shape of state in each tuple:")
+    # print([x[0].shape for x in state_action_reward_data])
 
     # Check shapes of state components
     # print("Check shapes of states in the dataset:")
@@ -273,13 +273,13 @@ if __name__ == "__main__":
 
     if not generate_npz_file:
         # Collect data from the model and environment
-        states, actions, rewards = collect_data(model, env, 10)
+        states, actions, rewards = collect_data(model, env, 50)
 
         # Save data for supervised training in a .npz file
         np.savez("cnn_pong_data.npz", states=states, actions=actions, rewards=rewards)
 
         print("Data collection complete. Saved to 'cnn_pong_data.npz'.")
-        Collect_Reward_Pairs(env, model)
+        # Collect_Reward_Pairs(env, model)
 
     data = np.load("cnn_pong_data.npz", allow_pickle=True)
 
@@ -289,17 +289,17 @@ if __name__ == "__main__":
     actions = data["actions"]
     rewards = data["rewards"]
 
-    print("States shape:", states.shape)
-    print("Actions shape:", actions.shape)
-    print("Rewards shape:", rewards.shape)
+    # print("States shape:", states.shape)
+    # print("Actions shape:", actions.shape)
+    # print("Rewards shape:", rewards.shape)
 
     states_tensor = torch.tensor(states, dtype=torch.float32).to(device)
     actions_tensor = torch.tensor(actions, dtype=torch.float32).to(device)
     rewards_tensor = torch.tensor(rewards, dtype=torch.float32).to(device)
 
-    print("States tensor shape:", states_tensor.shape)
-    print("Actions tensor shape:", actions_tensor.shape)
-    print("Rewards tensor shape:", rewards_tensor.shape)
+    # print("States tensor shape:", states_tensor.shape)
+    # print("Actions tensor shape:", actions_tensor.shape)
+    # print("Rewards tensor shape:", rewards_tensor.shape)
 
     # Split the dataset into training and validation sets
     train_states, val_states, train_actions, val_actions, train_rewards, val_rewards = (
