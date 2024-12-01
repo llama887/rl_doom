@@ -1,6 +1,7 @@
 import json
 
 import gymnasium as gym
+import torch
 from stable_baselines3 import A2C, DQN, PPO
 from stable_baselines3.common.atari_wrappers import (
     ClipRewardEnv,
@@ -89,6 +90,33 @@ def load_model_and_envs():
     else:
         raise ValueError(f"Unsupported algorithm: {algorithm}")
     return model, env, eval_env
+
+
+class TrainingStep:
+    def __init__(self, state, action, reward):
+        """
+        Initialize a TrainingStep instance.
+
+        Parameters:
+        - state: The state at the time step (e.g., list, array, or tensor).
+        - action: The action taken at the time step (e.g., scalar, list, or tensor).
+        - reward: The reward received at the time step (e.g., scalar).
+        """
+        self.state = torch.tensor(state, dtype=torch.float32)
+        self.action = torch.tensor(action, dtype=torch.float32)
+        self.reward = torch.tensor(reward, dtype=torch.float32)
+
+    def to_tensor(self):
+        """
+        Converts the state and action into a single input tensor and keeps the reward separate.
+
+        Returns:
+        - input_tensor: A concatenated tensor of state and action.
+        - reward_tensor: A tensor of the reward.
+        """
+        input_tensor = torch.cat([self.state.flatten(), self.action.flatten()])
+        reward_tensor = self.reward.unsqueeze(0)  # Ensure reward is a 1D tensor
+        return input_tensor, reward_tensor
 
 
 if __name__ == "__main__":

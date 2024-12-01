@@ -30,8 +30,14 @@ RUN (type -p wget >/dev/null || (apt update && apt-get install wget -y)) \
     && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
     && apt update && apt install gh -y
 
+# Copy uv from the official distroless Docker image
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+# Verify uv installation (optional)
+RUN uvx pycowsay 'hello world!'
+
 # Copy your requirements.txt first (this is to cache dependencies installation)
 COPY requirements.txt /tmp/requirements.txt
 
-# Install any additional dependencies from requirements.txt
-RUN pip install -r /tmp/requirements.txt
+# Use uv to install dependencies from requirements.txt
+RUN uv pip install --system -r /tmp/requirements.txt

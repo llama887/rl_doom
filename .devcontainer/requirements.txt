@@ -1,4 +1,3 @@
-aider-chat==0.60.1
 gymnasium[atari,accept-rom-license]
 stable-baselines3==2.3.2
 tensorboard==2.18.0
