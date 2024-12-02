@@ -11,6 +11,7 @@ from sklearn.model_selection import train_test_split
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv, VecFrameStack
 from torch.utils.data import DataLoader, Dataset
+from tqdm import tqdm
 
 from train import make_env
 
@@ -46,8 +47,7 @@ class RewardCNN(nn.Module):
 def collect_data(model, env, n_episodes=100):
     states, actions, rewards = [], [], []
 
-    for ep in range(n_episodes):
-        print(f"Starting EP: {ep}/{n_episodes}")
+    for ep in tqdm(range(n_episodes)):
         obs = env.reset()
         done = False
         while not done:
@@ -96,8 +96,26 @@ def load_hyperparameters(filename="best_hyperparameters.json"):
 
 
 def calculate_accuracy(predicted, actual):
+    """
+    Calculate accuracy for classification tasks.
+
+    Args:
+        predicted (torch.Tensor): Logits with shape (batch_size, num_classes).
+        actual (torch.Tensor): Ground truth class indices with shape (batch_size).
+
+    Returns:
+        float: Classification accuracy.
+    """
+    assert predicted.dim() == 2, f"Expected 2D logits, got shape {predicted.shape}"
+    assert actual.dim() == 1, f"Expected 1D labels, got shape {actual.shape}"
+    assert predicted.size(0) == actual.size(
+        0
+    ), f"Batch size mismatch: logits {predicted.size(0)}, labels {actual.size(0)}"
+
     predicted_classes = torch.argmax(predicted, dim=1)  # Class with highest logit
-    return (predicted_classes == actual).float().mean().item()
+    correct = (predicted_classes == actual).float()  # Element-wise correctness
+    accuracy = correct.mean().item()  # Average correctness
+    return accuracy
 
 
 if __name__ == "__main__":
