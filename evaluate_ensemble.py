@@ -158,7 +158,7 @@ if __name__ == "__main__":
     ]
 
     # Load and preprocess data
-    with open("best_hyperparameters.json", "r") as f:
+    with open("agent_hyperparameters.json", "r") as f:
         hyperparameters = json.load(f)
 
     algorithm = hyperparameters.pop(

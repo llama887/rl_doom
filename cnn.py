@@ -1,8 +1,11 @@
+import argparse
 import json
 import os.path
+from functools import partial
 
 import matplotlib.pyplot as plt
 import numpy as np
+import optuna
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -27,21 +30,18 @@ class RewardCNN(nn.Module):
         self.conv1 = nn.Conv2d(6, 16, kernel_size=8, stride=4)
         self.conv2 = nn.Conv2d(16, 32, kernel_size=4, stride=2)
 
-        # Calculate the flattened size after conv layers
-        self.flattened_size = 2592  # Matches the shape in your debug output
+        self.flattened_size = 2592
         self.fc1 = nn.Linear(self.flattened_size, 256)
         self.fc2 = nn.Linear(257, 3)  # Output 3 logits for classification
 
     def forward(self, state, action):
         cnn_out = F.relu(self.conv1(state))
         cnn_out = F.relu(self.conv2(cnn_out))
-        cnn_out = cnn_out.view(state.size(0), -1)  # Flatten CNN output
+        cnn_out = cnn_out.view(state.size(0), -1)
         cnn_out = F.relu(self.fc1(cnn_out))
-        action = action.view(
-            action.size(0), -1
-        )  # Ensure action has shape (batch_size, 1)
+        action = action.view(action.size(0), -1)
         combined_input = torch.cat((cnn_out, action), dim=1)
-        logits = self.fc2(combined_input)  # Predict logits for three classes
+        logits = self.fc2(combined_input)
         return logits
 
 
@@ -75,7 +75,6 @@ def downsample_rewards(states, actions, rewards):
     # Count instances
     n_positive = len(positive_indices)
     n_negative = len(negative_indices)
-    n_zero = len(zero_indices)
 
     # Find the smallest class count excluding zeros
     min_nonzero_count = min(n_positive, n_negative)
@@ -155,7 +154,7 @@ class StateActionRewardDataset(Dataset):
         return state, action, label.item()  # Use `.item()` to ensure label is a scalar
 
 
-def load_hyperparameters(filename="best_hyperparameters.json"):
+def load_hyperparameters(filename="agent_hyperparameters.json"):
     # Load the best hyperparameters from a JSON file
     with open(filename, "r") as f:
         params = json.load(f)
@@ -179,13 +178,161 @@ def calculate_accuracy(predicted, actual):
         0
     ), f"Batch size mismatch: logits {predicted.size(0)}, labels {actual.size(0)}"
 
-    predicted_classes = torch.argmax(predicted, dim=1)  # Class with highest logit
-    correct = (predicted_classes == actual).float()  # Element-wise correctness
-    accuracy = correct.mean().item()  # Average correctness
+    predicted_classes = torch.argmax(predicted, dim=1)
+    correct = (predicted_classes == actual).float()
+    accuracy = correct.mean().item()
     return accuracy
 
 
+def train(train_dataset, val_dataset, epochs, hyperparams, tuning=False):
+    train_loader = DataLoader(
+        train_dataset, batch_size=hyperparams["batch_size"], shuffle=True
+    )
+    val_loader = DataLoader(
+        val_dataset, batch_size=hyperparams["batch_size"], shuffle=False
+    )
+
+    train_losses = []
+    val_losses = []
+    train_accuracies = []
+    val_accuracies = []
+
+    action_dim = env.action_space
+    state_shape = env.observation_space.shape
+
+    reward_model = RewardCNN(state_shape, action_dim).to(device)
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(
+        reward_model.parameters(),
+        lr=hyperparams["learning_rate"],
+        weight_decay=hyperparams["weight_decay"],
+    )
+    scheduler = optim.lr_scheduler.StepLR(
+        optimizer,
+        step_size=hyperparams["step_size"],
+        gamma=hyperparams["gamma"],
+    )
+
+    num_epochs = epochs
+    best_val_loss = float("inf")  # Initialize best validation loss to infinity
+    best_model_path = "best_reward_model.pth"  # Path to save the best model
+
+    for epoch in range(num_epochs):
+        reward_model.train()
+        train_loss = 0.0
+        train_accuracy = 0.0
+
+        for state, action, label in train_loader:
+            state = state.to(device, dtype=torch.float32)
+            action = action.to(device, dtype=torch.float32)
+            label = label.to(device, dtype=torch.long)
+
+            optimizer.zero_grad()
+            logits = reward_model(state, action)
+            loss = criterion(logits, label)
+            loss.backward()
+            optimizer.step()
+
+            train_loss += loss.item()
+            if not tuning:
+                train_accuracy += calculate_accuracy(logits, label)
+
+        scheduler.step()
+
+        if not tuning:
+            train_losses.append(train_loss / len(train_loader))
+            train_accuracies.append(train_accuracy / len(train_loader))
+
+        reward_model.eval()
+        val_loss = 0.0
+        val_accuracy = 0.0
+
+        with torch.no_grad():
+            for state, action, label in val_loader:
+                state = state.to(device, dtype=torch.float32)
+                action = action.to(device, dtype=torch.float32)
+                label = label.to(device, dtype=torch.long)
+
+                logits = reward_model(state, action)
+                loss = criterion(logits, label)
+
+                val_loss += loss.item()
+                if not tuning:
+                    val_accuracy += calculate_accuracy(logits, label)
+
+        val_losses.append(val_loss / len(val_loader))
+        val_accuracies.append(val_accuracy / len(val_loader))
+
+        # Check if the current validation loss is the best
+        if val_losses[-1] < best_val_loss:
+            best_val_loss = val_losses[-1]
+            if not tuning:
+                torch.save(reward_model.state_dict(), best_model_path)
+                print(
+                    f"Saved best model at epoch {epoch + 1} with validation loss {best_val_loss:.4f}"
+                )
+
+        if not tuning and epoch % 1000 == 0:
+            print(
+                f"Epoch {epoch + 1}/{num_epochs}, Train Loss: {train_losses[-1]:.4f}, "
+                f"Validation Loss: {val_losses[-1]:.4f}, Train Accuracy: {train_accuracies[-1]:.4f}, "
+                f"Validation Accuracy: {val_accuracies[-1]:.4f}"
+            )
+        if tuning and epoch % 1000 == 0:
+            print(
+                f"Epoch {epoch + 1}/{num_epochs}, Validation Loss: {val_losses[-1]:.4f}"
+            )
+    if not tuning:
+        print(
+            f"Training complete. Best model saved to {best_model_path} with validation loss {best_val_loss:.4f}."
+        )
+        plt.figure(figsize=(12, 6))
+        plt.plot(range(1, num_epochs + 1), train_losses, label="Training Loss")
+        plt.plot(range(1, num_epochs + 1), val_losses, label="Validation Loss")
+        plt.xlabel("Epochs")
+        plt.ylabel("Loss")
+        plt.title("Training and Validation Loss")
+        plt.legend()
+        plt.savefig("loss.png")
+
+        plt.figure(figsize=(12, 6))
+        plt.plot(range(1, num_epochs + 1), train_accuracies, label="Training Accuracy")
+        plt.plot(range(1, num_epochs + 1), val_accuracies, label="Validation Accuracy")
+        plt.xlabel("Epochs")
+        plt.ylabel("Accuracy")
+        plt.title("Training and Validation Accuracy")
+        plt.legend()
+        plt.savefig("accuracy.png")
+    return best_val_loss
+
+
+def objective(trial, train_dataset, val_dataset):
+    # Define the search space for Optuna
+    hyperparameters = {
+        "learning_rate": trial.suggest_float("learning_rate", 1e-5, 1e-2, log=True),
+        "weight_decay": trial.suggest_float("weight_decay", 1e-6, 1e-3, log=True),
+        "step_size": trial.suggest_int("step_size", 100, 1000),
+        "gamma": trial.suggest_float("gamma", 0.01, 0.5),
+        "batch_size": trial.suggest_int("batch_size", 1, 64),
+    }
+    return train(
+        train_dataset,
+        val_dataset,
+        epochs=10000,
+        hyperparams=hyperparameters,
+        tuning=True,
+    )
+
+
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Train RewardCNN with hyperparameter tuning."
+    )
+    parser.add_argument(
+        "--hyperparams", type=str, help="Path to hyperparameter JSON file (optional)."
+    )
+    args = parser.parse_args()
+
     # Load and preprocess data
     hyperparameters = load_hyperparameters()
     algorithm = hyperparameters.pop(
@@ -208,7 +355,7 @@ if __name__ == "__main__":
     generate_npz_file = os.path.isfile("cnn_pong_data.npz")
 
     if not generate_npz_file:
-        states, actions, rewards = collect_data(model, env, 10, True)
+        states, actions, rewards = collect_data(model, env, 100, True)
         np.savez("cnn_pong_data.npz", states=states, actions=actions, rewards=rewards)
         print("Data collection complete. Saved to 'cnn_pong_data.npz'.")
 
@@ -217,6 +364,11 @@ if __name__ == "__main__":
     states = data["states"]
     actions = data["actions"]
     rewards = data["rewards"]
+
+    # Get unique rewards and their counts
+    unique, counts = np.unique(rewards, return_counts=True)
+    for value, count in zip(unique, counts):
+        print(f"Reward {value} occurs {count} times")
 
     states_tensor = torch.tensor(states, dtype=torch.float32).to(device)
     actions_tensor = torch.tensor(actions, dtype=torch.float32).to(device)
@@ -235,87 +387,22 @@ if __name__ == "__main__":
     train_dataset = StateActionRewardDataset(train_states, train_actions, train_rewards)
     val_dataset = StateActionRewardDataset(val_states, val_actions, val_rewards)
 
-    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
-
-    train_losses = []
-    val_losses = []
-    train_accuracies = []
-    val_accuracies = []
-
-    action_dim = env.action_space.n
-    state_shape = env.observation_space.shape
-    print(f"Action dim: {action_dim}, State shape: {state_shape}")
-
-    reward_model = RewardCNN(state_shape, action_dim).to(device)
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(reward_model.parameters(), lr=0.001)
-
-    num_epochs = 10
-    for epoch in range(num_epochs):
-        reward_model.train()
-        train_loss = 0.0
-        train_accuracy = 0.0
-
-        for state, action, label in train_loader:
-            state = state.to(device, dtype=torch.float32)
-            action = action.to(device, dtype=torch.float32)
-            label = label.to(device, dtype=torch.long)
-
-            optimizer.zero_grad()
-            logits = reward_model(state, action)
-            loss = criterion(logits, label)
-            loss.backward()
-            optimizer.step()
-
-            train_loss += loss.item()
-            train_accuracy += calculate_accuracy(logits, label)
-
-        train_losses.append(train_loss / len(train_loader))
-        train_accuracies.append(train_accuracy / len(train_loader))
-
-        reward_model.eval()
-        val_loss = 0.0
-        val_accuracy = 0.0
-
-        with torch.no_grad():
-            for state, action, label in val_loader:
-                state = state.to(device, dtype=torch.float32)
-                action = action.to(device, dtype=torch.float32)
-                label = label.to(device, dtype=torch.long)
-
-                logits = reward_model(state, action)
-                loss = criterion(logits, label)
-
-                val_loss += loss.item()
-                val_accuracy += calculate_accuracy(logits, label)
-
-        val_losses.append(val_loss / len(val_loader))
-        val_accuracies.append(val_accuracy / len(val_loader))
-
-        print(
-            f"Epoch {epoch + 1}/{num_epochs}, Train Loss: {train_losses[-1]:.4f}, "
-            f"Validation Loss: {val_losses[-1]:.4f}, Train Accuracy: {train_accuracies[-1]:.4f}, "
-            f"Validation Accuracy: {val_accuracies[-1]:.4f}"
+    if args.hyperparams:
+        # Load hyperparameters from file
+        with open(args.hyperparams, "r") as f:
+            hyperparameters = json.load(f)
+    else:
+        # Run Optuna optimization
+        study = optuna.create_study(direction="minimize")
+        study.optimize(
+            partial(objective, train_dataset=train_dataset, val_dataset=val_dataset),
+            n_trials=50,
         )
 
-    plt.figure(figsize=(12, 6))
-    plt.plot(range(1, num_epochs + 1), train_losses, label="Training Loss")
-    plt.plot(range(1, num_epochs + 1), val_losses, label="Validation Loss")
-    plt.xlabel("Epochs")
-    plt.ylabel("Loss")
-    plt.title("Training and Validation Loss")
-    plt.legend()
-    plt.savefig("loss.png")
+        # Save best hyperparameters
+        hyperparameters = study.best_params
+        with open("cnn_hyperparameters.json", "w") as f:
+            json.dump(hyperparameters, f, indent=4)
+        print("Best hyperparameters saved to cnn_hyperparameters.json")
 
-    plt.figure(figsize=(12, 6))
-    plt.plot(range(1, num_epochs + 1), train_accuracies, label="Training Accuracy")
-    plt.plot(range(1, num_epochs + 1), val_accuracies, label="Validation Accuracy")
-    plt.xlabel("Epochs")
-    plt.ylabel("Accuracy")
-    plt.title("Training and Validation Accuracy")
-    plt.legend()
-    plt.savefig("accuracy.png")
-
-    torch.save(reward_model.state_dict(), "reward_model.pth")
-    print("Training complete and model saved.")
+    train(train_dataset, val_dataset, epochs=1000000, hyperparams=hyperparameters)

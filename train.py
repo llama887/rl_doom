@@ -16,8 +16,6 @@ from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import DummyVecEnv, VecFrameStack
 
-USE_ATARI_MAKE = True
-
 
 def make_env(render_mode=None):
     env = gym.make(
@@ -35,7 +33,7 @@ def make_env(render_mode=None):
     return Monitor(env)
 
 
-def load_hyperparameters(filename="best_hyperparameters.json"):
+def load_hyperparameters(filename="agent_hyperparameters.json"):
     # Load the best hyperparameters from a JSON file
     with open(filename, "r") as f:
         params = json.load(f)

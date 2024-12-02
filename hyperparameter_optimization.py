@@ -142,5 +142,5 @@ if __name__ == "__main__":
 
     print(study.best_params)
 
-    with open("best_hyperparameters.json", "w") as f:
+    with open("agent_hyperparameters.json", "w") as f:
         json.dump(study.best_params, f)
