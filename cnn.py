@@ -8,6 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from sklearn.model_selection import train_test_split
+from sklearn.utils import resample
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv, VecFrameStack
 from torch.utils.data import DataLoader, Dataset
@@ -44,7 +45,7 @@ class RewardCNN(nn.Module):
         return logits
 
 
-def collect_data(model, env, n_episodes=100):
+def collect_data(model, env, n_episodes=100, down_sample=False):
     states, actions, rewards = [], [], []
 
     for ep in tqdm(range(n_episodes)):
@@ -57,8 +58,74 @@ def collect_data(model, env, n_episodes=100):
             actions.append(action)
             rewards.append(reward)
             obs = next_obs
-
+    if down_sample:
+        states, actions, rewards = downsample_rewards(states, actions, rewards)
     return np.array(states), np.array(actions), np.array(rewards)
+
+
+def downsample_rewards(states, actions, rewards):
+    # Ensure rewards is a NumPy array
+    rewards = np.array(rewards)
+
+    # Split data into three categories
+    zero_indices = np.atleast_1d(rewards == 0).nonzero()[0]
+    positive_indices = np.atleast_1d(rewards > 0).nonzero()[0]
+    negative_indices = np.atleast_1d(rewards < 0).nonzero()[0]
+
+    # Count instances
+    n_positive = len(positive_indices)
+    n_negative = len(negative_indices)
+    n_zero = len(zero_indices)
+
+    # Find the smallest class count excluding zeros
+    min_nonzero_count = min(n_positive, n_negative)
+
+    # Downsample zeros to match the smallest non-zero class
+    zero_indices_downsampled = resample(
+        zero_indices, replace=False, n_samples=min_nonzero_count, random_state=42
+    )
+
+    # Downsample the larger of positive or negative to match the smaller one
+    if n_positive > n_negative:
+        positive_indices_downsampled = resample(
+            positive_indices,
+            replace=False,
+            n_samples=min_nonzero_count,
+            random_state=42,
+        )
+        negative_indices_downsampled = negative_indices
+    else:
+        negative_indices_downsampled = resample(
+            negative_indices,
+            replace=False,
+            n_samples=min_nonzero_count,
+            random_state=42,
+        )
+        positive_indices_downsampled = positive_indices
+
+    # Combine all selected indices
+    selected_indices = np.concatenate(
+        [
+            zero_indices_downsampled,
+            positive_indices_downsampled,
+            negative_indices_downsampled,
+        ]
+    )
+
+    selected_indices = np.array(selected_indices, dtype=int)
+
+    # Shuffle the indices
+    np.random.shuffle(selected_indices)
+
+    states = np.array(states)
+    actions = np.array(actions)
+    rewards = np.array(rewards)
+
+    return (
+        states[selected_indices],
+        actions[selected_indices],
+        rewards[selected_indices],
+    )
 
 
 class StateActionRewardDataset(Dataset):
@@ -141,7 +208,7 @@ if __name__ == "__main__":
     generate_npz_file = os.path.isfile("cnn_pong_data.npz")
 
     if not generate_npz_file:
-        states, actions, rewards = collect_data(model, env, 50)
+        states, actions, rewards = collect_data(model, env, 10, True)
         np.savez("cnn_pong_data.npz", states=states, actions=actions, rewards=rewards)
         print("Data collection complete. Saved to 'cnn_pong_data.npz'.")
 

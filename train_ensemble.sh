@@ -17,3 +17,5 @@ for i in $(seq 1 $1); do
     mv loss.png figures/loss$i.png
     mv accuracy.png figures/accuracy$i.png
 done
+
+python evaluate_ensemble.py
