@@ -263,25 +263,41 @@ def train(train_dataset, val_dataset, epochs, hyperparams, tuning=False):
         val_losses.append(val_loss / len(val_loader))
         val_accuracies.append(val_accuracy / len(val_loader))
 
-        # Check if the current validation loss is the best
-        if val_losses[-1] < best_val_loss:
-            best_val_loss = val_losses[-1]
-            if not tuning:
+        # Check for early stopping criteria
+        if not tuning:
+            if val_losses[-1] < best_val_loss:
+                best_val_loss = val_losses[-1]
                 torch.save(reward_model.state_dict(), best_model_path)
                 print(
-                    f"Saved best model at epoch {epoch + 1} with validation loss {best_val_loss:.4f}"
+                    f"Saved best model at epoch {epoch} with validation loss {best_val_loss}"
                 )
 
-        if not tuning and epoch % 1000 == 0:
-            print(
-                f"Epoch {epoch + 1}/{num_epochs}, Train Loss: {train_losses[-1]:.4f}, "
-                f"Validation Loss: {val_losses[-1]:.4f}, Train Accuracy: {train_accuracies[-1]:.4f}, "
-                f"Validation Accuracy: {val_accuracies[-1]:.4f}"
-            )
-        if tuning and epoch % 1000 == 0:
-            print(
-                f"Epoch {epoch + 1}/{num_epochs}, Validation Loss: {val_losses[-1]:.4f}"
-            )
+            if (
+                train_losses[-1] > 2 * val_losses[-1]
+                or val_losses[-1] > 2 * train_losses[-1]
+            ):
+                print(
+                    f"Early stopping at epoch {epoch + 1} due to loss divergence: "
+                    f"Train Loss = {train_losses[-1]}, Val Loss = {val_losses[-1]}"
+                )
+                break
+
+            if train_accuracies[-1] >= 0.999 and val_accuracies[-1] >= 0.999:
+                print(
+                    f"Early stopping at epoch {epoch} due to high accuracy: "
+                    f"Train Accuracy = {train_accuracies[-1]:.4f}, Val Accuracy = {val_accuracies[-1]:.4f}"
+                )
+                break
+
+            if epoch % 1000 == 0:
+                print(
+                    f"Epoch {epoch}/{num_epochs}, Train Loss: {train_losses[-1]}, "
+                    f"Validation Loss: {val_losses[-1]}, Train Accuracy: {train_accuracies[-1]}, "
+                    f"Validation Accuracy: {val_accuracies[-1]}"
+                )
+        elif tuning and epoch % 1000 == 0:
+            print(f"Epoch {epoch}/{num_epochs}, Validation Loss: {val_losses[-1]}")
+
     if not tuning:
         print(
             f"Training complete. Best model saved to {best_model_path} with validation loss {best_val_loss:.4f}."
@@ -405,4 +421,4 @@ if __name__ == "__main__":
             json.dump(hyperparameters, f, indent=4)
         print("Best hyperparameters saved to cnn_hyperparameters.json")
 
-    train(train_dataset, val_dataset, epochs=1000000, hyperparams=hyperparameters)
+    train(train_dataset, val_dataset, epochs=20000, hyperparams=hyperparameters)
