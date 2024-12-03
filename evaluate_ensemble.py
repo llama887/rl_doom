@@ -62,9 +62,9 @@ def calculate_accuracy(predictions, labels):
     return accuracy
 
 
-def roll_out_and_evaluate(env, model, ensemble, n_episodes=10):
+def roll_out_and_evaluate(env, model, ensemble, n_episodes=100):
     print("Rolling out trajectories...")
-    states, actions, true_rewards = collect_data(model, env, n_episodes)
+    states, actions, true_rewards = collect_data(model, env, n_episodes, True)
 
     print("Evaluating...")
     states = torch.tensor(np.array(states), dtype=torch.float32).to(device)
@@ -94,6 +94,7 @@ def roll_out_and_evaluate(env, model, ensemble, n_episodes=10):
                 batch_ensemble_predictions.append(predicted_classes)
 
         # Aggregate predictions from ensemble (majority vote)
+        print(batch_ensemble_predictions)
         batch_ensemble_predictions = torch.stack(batch_ensemble_predictions, dim=1)
         batch_final_predictions, _ = torch.mode(batch_ensemble_predictions, dim=1)
 
@@ -188,7 +189,7 @@ if __name__ == "__main__":
         true_labels,
         ensemble_predictions,
         ensemble_accuracy,
-    ) = roll_out_and_evaluate(env, model, ensemble, n_episodes=10)
+    ) = roll_out_and_evaluate(env, model, ensemble)
 
     # Plot confusion matrices
     print("Plotting confusion matrices...")
