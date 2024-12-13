@@ -46,7 +46,7 @@ def evaluate_best_model(model_path, algorithm="PPO", n_stack=4):
 
 if __name__ == "__main__":
     # Update the model path and algorithm if needed
-    best_model_path = "./logs/best_model.zip"
+    best_model_path = "logs/rl_model_100000_steps.zip"
 
     params = load_hyperparameters()
     algorithm = params.pop("algorithm", "PPO")

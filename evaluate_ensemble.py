@@ -73,7 +73,6 @@ def roll_out_and_evaluate(env, model, ensemble, n_episodes=100):
     test_dataset = StateActionRewardDataset(states, actions, true_rewards)
     test_loader = DataLoader(test_dataset, batch_size=16, shuffle=True, drop_last=True)
 
-    # Initialize lists for true labels and predictions
     all_true_labels = []
     all_ensemble_predictions = []
 
@@ -81,11 +80,8 @@ def roll_out_and_evaluate(env, model, ensemble, n_episodes=100):
         state = state.to(device, dtype=torch.float32)
         action = action.to(device, dtype=torch.float32)
         label = label.to(device, dtype=torch.long)
-
-        # Store true labels for this batch
         all_true_labels.append(label)
 
-        # Evaluate ensemble predictions for this batch
         batch_ensemble_predictions = []
         for model in ensemble:
             with torch.no_grad():
@@ -94,7 +90,6 @@ def roll_out_and_evaluate(env, model, ensemble, n_episodes=100):
                 batch_ensemble_predictions.append(predicted_classes)
 
         # Aggregate predictions from ensemble (majority vote)
-        print(batch_ensemble_predictions)
         batch_ensemble_predictions = torch.stack(batch_ensemble_predictions, dim=1)
         batch_final_predictions, _ = torch.mode(batch_ensemble_predictions, dim=1)
 
@@ -104,10 +99,7 @@ def roll_out_and_evaluate(env, model, ensemble, n_episodes=100):
     # Concatenate all batches into a single tensor
     all_true_labels = torch.cat(all_true_labels, dim=0)
     all_ensemble_predictions = torch.cat(all_ensemble_predictions, dim=0)
-
-    # Calculate ensemble accuracy
     ensemble_accuracy = calculate_accuracy(all_ensemble_predictions, all_true_labels)
-
     print(f"Ensemble Accuracy: {ensemble_accuracy:.4f}")
 
     return (

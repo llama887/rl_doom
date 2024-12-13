@@ -30,7 +30,8 @@
 				"pkief.material-icon-theme",
 				"jeff-hykin.polacode-2019",
 				"streetsidesoftware.code-spell-checker",
-				"tomoki1207.pdf"
+				"tomoki1207.pdf",
+				"adpyke.codesnap"
 			],
 			"settings": {
 				"[python]": {
