@@ -1,4 +1,4 @@
-# rl_doom
+# rl_pong
 Final project for CS-GY 6923 Fall 2024. 
 
 # Installing Dependencies
